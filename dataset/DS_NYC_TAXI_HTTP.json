@@ -1,0 +1,16 @@
+{
+	"name": "DS_NYC_TAXI_HTTP",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_NYC_TAXI_HTTP",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "HttpServerLocation"
+			}
+		}
+	}
+}
