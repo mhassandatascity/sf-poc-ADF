@@ -9,7 +9,8 @@
 		"type": "Binary",
 		"typeProperties": {
 			"location": {
-				"type": "HttpServerLocation"
+				"type": "HttpServerLocation",
+				"relativeUrl": "trip-data/yellow_tripdata_2026-01.parquet"
 			}
 		}
 	}
