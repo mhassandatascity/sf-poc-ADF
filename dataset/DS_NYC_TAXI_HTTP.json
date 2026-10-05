@@ -10,7 +10,7 @@
 		"typeProperties": {
 			"location": {
 				"type": "HttpServerLocation",
-				"relativeUrl": "trip-data/yellow_tripdata_2026-02.parquet"
+				"relativeUrl": "trip-data/yellow_tripdata_2026-01.parquet"
 			}
 		}
 	}
