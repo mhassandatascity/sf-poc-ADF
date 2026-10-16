@@ -1,0 +1,10 @@
+{
+	"name": "LS_ADLS_POC",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "https://sfpocstg.dfs.core.windows.net/"
+		}
+	}
+}
