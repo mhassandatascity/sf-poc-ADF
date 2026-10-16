@@ -1,0 +1,28 @@
+{
+	"name": "LS_SQLServer_Amkai",
+	"properties": {
+		"description": "Amkai SQL Server",
+		"annotations": [],
+		"type": "SqlServer",
+		"typeProperties": {
+			"server": "10.1.12.135",
+			"database": "AE",
+			"encrypt": "mandatory",
+			"trustServerCertificate": true,
+			"authenticationType": "SQL",
+			"userName": "genware",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "sec-amkai-sqlserver-auth-password"
+			}
+		},
+		"connectVia": {
+			"referenceName": "SAE-SelfHosted-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

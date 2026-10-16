@@ -1,0 +1,26 @@
+{
+	"name": "LS_TriZetto_4L81_SFTP",
+	"properties": {
+		"annotations": [],
+		"type": "Sftp",
+		"typeProperties": {
+			"host": "sftp.gatewayedi.com",
+			"port": 22,
+			"skipHostKeyValidation": true,
+			"authenticationType": "Basic",
+			"userName": "6CLH",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "sec-trizetto-sftp-4L81-password"
+			}
+		},
+		"connectVia": {
+			"referenceName": "SAE-SelfHosted-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

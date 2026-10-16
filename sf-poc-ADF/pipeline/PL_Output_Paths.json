@@ -1,0 +1,344 @@
+{
+	"name": "PL_Output_Paths",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set Return Values",
+				"description": "Set the return values of various output paths",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set data_output_path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set csv_output_path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set excel_output_path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set metadata_output_path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set syncdata_output_path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set bin_output_path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set data_folder_path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "data_output_path",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('data_output_path')"
+							}
+						},
+						{
+							"key": "csv_output_path",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('csv_output_path')"
+							}
+						},
+						{
+							"key": "excel_output_path",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('excel_output_path')"
+							}
+						},
+						{
+							"key": "metadata_output_path",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('metadata_output_path')"
+							}
+						},
+						{
+							"key": "syncdata_output_path",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('syncdata_output_path')"
+							}
+						},
+						{
+							"key": "bin_output_path",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('bin_output_path')"
+							}
+						},
+						{
+							"key": "data_folder_path",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('data_folder_path')"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			},
+			{
+				"name": "Set current_date_str",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "current_date_str",
+					"value": {
+						"value": "@formatDateTime(convertTimeZone(utcnow(),'UTC','Eastern Standard Time'), 'yyyyMMddHHmm')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set data_output_path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set current_date_str",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "data_output_path",
+					"value": {
+						"value": "@{pipeline().parameters.main_pipeline_name}/raw/@{variables('current_date_str')}/@{pipeline().parameters.tgt_db}/@{pipeline().parameters.tgt_schema}",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set csv_output_path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set current_date_str",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "csv_output_path",
+					"value": {
+						"value": "@{pipeline().parameters.main_pipeline_name}/raw/@{variables('current_date_str')}/csv",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set excel_output_path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set current_date_str",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "excel_output_path",
+					"value": {
+						"value": "@{pipeline().parameters.main_pipeline_name}/raw/@{variables('current_date_str')}/xlsx",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set metadata_output_path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set current_date_str",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "metadata_output_path",
+					"value": {
+						"value": "@{pipeline().parameters.main_pipeline_name}/raw/@{variables('current_date_str')}/@{pipeline().parameters.tgt_db}/metadata",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set syncdata_output_path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set current_date_str",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "syncdata_output_path",
+					"value": {
+						"value": "@{pipeline().parameters.main_pipeline_name}/raw/@{variables('current_date_str')}/@{pipeline().parameters.tgt_db}/syncdata",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set bin_output_path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set current_date_str",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "bin_output_path",
+					"value": {
+						"value": "@{pipeline().parameters.main_pipeline_name}/raw/@{variables('current_date_str')}/bin",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set data_folder_path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set current_date_str",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "data_folder_path",
+					"value": {
+						"value": "@{variables('current_date_str')}/@{pipeline().parameters.tgt_db}/@{pipeline().parameters.tgt_schema}",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"tgt_db": {
+				"type": "string"
+			},
+			"tgt_schema": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"current_date_str": {
+				"type": "String"
+			},
+			"data_output_path": {
+				"type": "String"
+			},
+			"excel_output_path": {
+				"type": "String"
+			},
+			"csv_output_path": {
+				"type": "String"
+			},
+			"metadata_output_path": {
+				"type": "String"
+			},
+			"syncdata_output_path": {
+				"type": "String"
+			},
+			"bin_output_path": {
+				"type": "String"
+			},
+			"data_folder_path": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Shared_Pipelines"
+		},
+		"annotations": [],
+		"lastPublishTime": "2024-12-18T16:00:18Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

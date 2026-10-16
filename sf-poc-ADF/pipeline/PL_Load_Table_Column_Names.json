@@ -1,0 +1,131 @@
+{
+	"name": "PL_Load_Table_Column_Names",
+	"properties": {
+		"activities": [
+			{
+				"name": "Create XML fields",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.columns",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "AppendColumnNames",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@concat(pipeline().parameters.table_name,'-',item().ID)"
+								}
+							],
+							"typeProperties": {
+								"variableName": "column_names",
+								"value": {
+									"value": "@concat('<field>',item().ID,'</field>')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Return Column Names",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Create XML Fields From Additional Columns",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [
+					{
+						"name": "item()",
+						"value": "@pipeline().parameters.table_name"
+					}
+				],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "columns",
+							"value": {
+								"type": "Expression",
+								"content": "@join(variables('column_names'),'')"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			},
+			{
+				"name": "Create XML Fields From Additional Columns",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Create XML fields",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.additional_columns",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "AppendColumnNamesFromAdditionalColumns",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "column_names",
+								"value": {
+									"value": "<field>@{item()}</field>",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"columns": {
+				"type": "array"
+			},
+			"additional_columns": {
+				"type": "array"
+			},
+			"table_name": {
+				"type": "string",
+				"defaultValue": "DO NOT USE"
+			}
+		},
+		"variables": {
+			"column_names": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "Job_SageIntacct"
+		},
+		"annotations": []
+	}
+}

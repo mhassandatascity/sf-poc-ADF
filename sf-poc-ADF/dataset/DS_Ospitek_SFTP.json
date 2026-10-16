@@ -1,0 +1,60 @@
+{
+	"name": "DS_Ospitek_SFTP",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Ospiteck_SFTP",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"sftp_host": {
+					"value": "@dataset().sftp_host",
+					"type": "Expression"
+				},
+				"sftp_user_name": {
+					"value": "@dataset().sftp_user_name",
+					"type": "Expression"
+				},
+				"sftp_private_key": {
+					"value": "@dataset().sftp_private_key",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"remote_directory": {
+				"type": "string",
+				"defaultValue": "/sftp.orthori.view2.ospitek.com"
+			},
+			"sftp_host": {
+				"type": "string",
+				"defaultValue": "sftp.orthori.view2.ospitek.com"
+			},
+			"sftp_user_name": {
+				"type": "string",
+				"defaultValue": "orthori"
+			},
+			"sftp_private_key": {
+				"type": "string",
+				"defaultValue": "sec-ospitek-sftp-priv-key"
+			}
+		},
+		"folder": {
+			"name": "Ospitek"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "SftpLocation",
+				"folderPath": {
+					"value": "@dataset().remote_directory",
+					"type": "Expression"
+				}
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}

@@ -1,0 +1,67 @@
+{
+	"name": "PL_AM_DB_Provider_Bonus_Table",
+	"properties": {
+		"description": "Refresh [AM_DB].[dbo].[Provider_Bonus_Table] from source file",
+		"activities": [
+			{
+				"name": "Wait1",
+				"type": "Wait",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			}
+		],
+		"variables": {
+			"src_container": {
+				"type": "String",
+				"defaultValue": "provider-bonus-plans"
+			},
+			"src_path": {
+				"type": "String",
+				"defaultValue": "filedrops"
+			},
+			"src_file": {
+				"type": "String",
+				"defaultValue": "Bonus Plans.xlsx"
+			},
+			"target_db": {
+				"type": "String",
+				"defaultValue": "AM_DB"
+			},
+			"target_table_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"target_table": {
+				"type": "String",
+				"defaultValue": "Provider_Bonus_Table"
+			},
+			"write_mode": {
+				"type": "String",
+				"defaultValue": "truncate"
+			},
+			"target_archive_path": {
+				"type": "String",
+				"defaultValue": "archive"
+			},
+			"backup_existing_table": {
+				"type": "Boolean",
+				"defaultValue": true
+			},
+			"restore_existing_table": {
+				"type": "Boolean",
+				"defaultValue": true
+			},
+			"src_file_type": {
+				"type": "String",
+				"defaultValue": "xlsx"
+			}
+		},
+		"folder": {
+			"name": "Job_Data_Refresh_From_Files"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,351 @@
+{
+	"name": "PL_DBT_Run_Command_Transform",
+	"properties": {
+		"activities": [
+			{
+				"name": "StartDBTJob",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Set DBTCommand",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.0:30:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"url": {
+						"value": "@concat('http://',pipeline().globalParameters.ENV_AZ_DBT_IP,':8000/run_dbt')",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": {
+						"command": "@activity('Set DBTCommand').output.pipelineReturnValue.SetDBTCommand",
+						"job_id": "@pipeline().RunId"
+					}
+				}
+			},
+			{
+				"name": "GetJobId",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "StartDBTJob",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "JobId",
+					"value": {
+						"value": "@string(activity('StartDBTJob').output.job_id)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "PollJobStatus",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "GetJobId",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(equals(variables('JobStatus'), 'running'))\n\n",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "GetJobStatus",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "00:10:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": {
+									"value": "@concat('http://', pipeline().globalParameters.ENV_AZ_DBT_IP, ':8000/job_status/', variables('JobId'))",
+									"type": "Expression"
+								},
+								"connectVia": {
+									"referenceName": "SAE-SelfHosted-IR",
+									"type": "IntegrationRuntimeReference"
+								}
+							}
+						},
+						{
+							"name": "SetJobStatus",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "GetJobStatus",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "JobStatus",
+								"value": {
+									"value": "@string(activity('GetJobStatus').output.status)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "SetJobLog",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "GetJobStatus",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "JobLog",
+								"value": {
+									"value": "@if(equals(activity('GetJobStatus').output.log_file, null), '', string(activity('GetJobStatus').output.log_file))\n\n",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Wait",
+							"type": "Wait",
+							"dependsOn": [
+								{
+									"activity": "SetJobLog",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 30
+							}
+						}
+					],
+					"timeout": "01:00:00",
+					"timeoutActivity": {
+						"name": "FailTimeout",
+						"type": "Fail",
+						"typeProperties": {
+							"message": "DBT job did not complete within 1 hour."
+						}
+					}
+				}
+			},
+			{
+				"name": "CheckJobResult",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "PollJobStatus",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(variables('JobStatus'), 'success')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "FailSetVar",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "FailureMessage",
+								"value": "DBT job failed or was cancelled."
+							}
+						},
+						{
+							"name": "FailActivity",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "FailSetVar",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@variables('FailureMessage')",
+									"type": "Expression"
+								},
+								"errorCode": "5"
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "SuccessSetVar",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "SuccessMessage",
+								"value": "Completed successfully"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "GetJobOutput",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "PollJobStatus",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "00:10:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@concat('http://',pipeline().globalParameters.ENV_AZ_DBT_IP,':8000/job_output/', variables('JobId'))",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					}
+				}
+			},
+			{
+				"name": "Set DBTCommand",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_RunParams_set_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"dbt_model_path": {
+							"value": "@pipeline().parameters.model_path",
+							"type": "Expression"
+						},
+						"dbt_command": {
+							"value": "@pipeline().parameters.dbt_command",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"model_path": {
+				"type": "string"
+			},
+			"dbt_command": {
+				"type": "string",
+				"defaultValue": "run"
+			}
+		},
+		"variables": {
+			"SetDBTCommand": {
+				"type": "String"
+			},
+			"JobId": {
+				"type": "String"
+			},
+			"JobStatus": {
+				"type": "String"
+			},
+			"JobLog": {
+				"type": "String"
+			},
+			"SuccessMessage": {
+				"type": "String"
+			},
+			"FailureMessage": {
+				"type": "String"
+			},
+			"JobOutput": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Shared_DBT_Pipelines"
+		},
+		"annotations": []
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,55 @@
+{
+	"name": "adfseadeveus2",
+	"properties": {
+		"globalParameters": {
+			"ENV_KV_RESOURCE_URL": {
+				"type": "string",
+				"value": "https://vault.azure.net"
+			},
+			"ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC": {
+				"type": "string",
+				"value": "sec-spire-azureblob-sas-url"
+			},
+			"ENV_AZURE_BLOB_ACCOUNT_URL": {
+				"type": "string",
+				"value": "https://stseadeveus2.blob.core.windows.net"
+			},
+			"ENV_MAIL_CONFIG_DEVELOPERS": {
+				"type": "string",
+				"value": "jseipel@digitalnet.ai, mwaldner@digitalnet.ai, pchaploutskii@digitalnet.ai, rseenivasan@digitalnet.ai, tmcwilliams@digitalnet.ai, trosa@digitalnet.ai, jgeldart@digitalnet.ai"
+			},
+			"ENV_KV_BASE_URL": {
+				"type": "string",
+				"value": "https://kvseadeveus2.vault.azure.net"
+			},
+			"ENV_AZ_RG": {
+				"type": "string",
+				"value": "SpireADF_DEV"
+			},
+			"ENV_AZ_DBT_VM": {
+				"type": "string",
+				"value": "vmseadeveus2-dbt"
+			},
+			"ENV_STAGE": {
+				"type": "string",
+				"value": "dev"
+			},
+			"ENV_AZ_DBT_IP": {
+				"type": "string",
+				"value": "10.110.0.8"
+			}
+		},
+		"globalConfigurations": {
+			"PipelineBillingEnabled": "true",
+			"factoryStagingLSReferenceName": "LS_SpireDF_Blob_MSI",
+			"factoryStagingLSType": "LinkedServiceReference",
+			"factoryStagingFolderPath": "adfcostestimates"
+		}
+	},
+	"location": "eastus2",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "1fe1f890-86f1-4818-af59-70b6a94ac826",
+		"tenantId": "0b37acf3-47fc-48c4-af90-c64527e6fcef"
+	}
+}

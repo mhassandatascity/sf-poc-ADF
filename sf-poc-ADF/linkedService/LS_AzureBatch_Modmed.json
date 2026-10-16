@@ -1,0 +1,20 @@
+{
+	"name": "LS_AzureBatch_Modmed",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBatch",
+		"typeProperties": {
+			"batchUri": "https://baseadeveus2.eastus2.batch.azure.com",
+			"poolName": "modmed_batchpool",
+			"accountName": "baseadeveus2 ",
+			"linkedServiceName": {
+				"referenceName": "LS_SpireDF_Blob_MSI",
+				"type": "LinkedServiceReference"
+			}
+		},
+		"connectVia": {
+			"referenceName": "SAE-SelfHosted-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

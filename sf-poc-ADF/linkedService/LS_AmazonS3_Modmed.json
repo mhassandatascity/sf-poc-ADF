@@ -1,0 +1,45 @@
+{
+	"name": "LS_AmazonS3_Modmed",
+	"properties": {
+		"parameters": {
+			"sec_access_key": {
+				"type": "string"
+			},
+			"sec_secret_access_key": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AmazonS3",
+		"typeProperties": {
+			"serviceUrl": "https://s3.amazonaws.com",
+			"accessKeyId": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().sec_access_key",
+					"type": "Expression"
+				}
+			},
+			"secretAccessKey": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().sec_secret_access_key",
+					"type": "Expression"
+				}
+			},
+			"authenticationType": "AccessKey"
+		},
+		"connectVia": {
+			"referenceName": "SAE-SelfHosted-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

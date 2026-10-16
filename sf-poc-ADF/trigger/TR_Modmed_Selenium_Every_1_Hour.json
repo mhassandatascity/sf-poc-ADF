@@ -1,0 +1,24 @@
+{
+	"name": "TR_Modmed_Selenium_Every_1_Hour",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_Modmed_Selenium",
+					"type": "PipelineReference"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Hour",
+				"interval": 1,
+				"startTime": "2024-07-08T09:48:00",
+				"timeZone": "Eastern Standard Time"
+			}
+		}
+	}
+}

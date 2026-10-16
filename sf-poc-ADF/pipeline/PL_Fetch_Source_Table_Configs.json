@@ -1,0 +1,201 @@
+{
+	"name": "PL_Fetch_Source_Table_Configs",
+	"properties": {
+		"activities": [
+			{
+				"name": "Fetch Source Table Configs",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Set etl warehouse",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set etl database",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set etl username",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set etl role",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "SELECT *\nFROM @{concat(variables('snf_etl_database'), '.', pipeline().parameters.table_schema, '.', pipeline().parameters.table)}\n@{if(equals(pipeline().parameters.addl_tbl_filter,'NONE'), '', concat(' WHERE ', pipeline().parameters.addl_tbl_filter))}",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_Snowflake_Spire",
+						"type": "DatasetReference",
+						"parameters": {
+							"warehouse": {
+								"value": "@variables('snf_etl_warehouse')",
+								"type": "Expression"
+							},
+							"database": {
+								"value": "@variables('snf_etl_database')",
+								"type": "Expression"
+							},
+							"user_name": {
+								"value": "@variables('snf_etl_username')",
+								"type": "Expression"
+							},
+							"role": {
+								"value": "@variables('snf_etl_role')",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Set Pipeline Return Values",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Fetch Source Table Configs",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "TableNames",
+							"value": {
+								"type": "Expression",
+								"content": "@activity('Fetch Source Table Configs').output.value"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			},
+			{
+				"name": "Set etl username",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "snf_etl_username",
+					"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')"
+				}
+			},
+			{
+				"name": "Set etl role",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "snf_etl_role",
+					"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')"
+				}
+			},
+			{
+				"name": "Set etl database",
+				"description": "",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "snf_etl_database",
+					"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_META')"
+				}
+			},
+			{
+				"name": "Set etl warehouse",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "snf_etl_warehouse",
+					"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')"
+				}
+			}
+		],
+		"parameters": {
+			"table": {
+				"type": "string"
+			},
+			"table_schema": {
+				"type": "string"
+			},
+			"addl_tbl_filter": {
+				"type": "string",
+				"defaultValue": "NONE"
+			}
+		},
+		"variables": {
+			"snf_etl_database": {
+				"type": "String",
+				"defaultValue": "DEV_META"
+			},
+			"snf_etl_warehouse": {
+				"type": "String",
+				"defaultValue": "DEV_ADF_INGESTION_WH"
+			},
+			"snf_etl_username": {
+				"type": "String",
+				"defaultValue": "DEV_SVC_ADF"
+			},
+			"snf_etl_role": {
+				"type": "String",
+				"defaultValue": "DEV_SVC_INGESTION_ROLE"
+			}
+		},
+		"folder": {
+			"name": "Shared_Config_Pipelines"
+		},
+		"annotations": []
+	}
+}

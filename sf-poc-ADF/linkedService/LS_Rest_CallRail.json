@@ -1,0 +1,21 @@
+{
+	"name": "LS_Rest_CallRail",
+	"properties": {
+		"parameters": {
+			"service_url": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "RestService",
+		"typeProperties": {
+			"url": "@{linkedService().service_url}",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "Anonymous"
+		},
+		"connectVia": {
+			"referenceName": "SAE-SelfHosted-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

@@ -1,0 +1,25 @@
+{
+	"name": "TR_Provider_Bonus_Table_Refresh_Storage_Event",
+	"properties": {
+		"description": "[AM_DB].[dbo].[Provider_Bonus_Table] Refresh from excel",
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_AM_DB_Provider_Bonus_Table",
+					"type": "PipelineReference"
+				}
+			}
+		],
+		"type": "BlobEventsTrigger",
+		"typeProperties": {
+			"blobPathBeginsWith": "/provider-bonus-plans/blobs/filedrops/Bonus Plans.xlsx",
+			"ignoreEmptyBlobs": true,
+			"scope": "/subscriptions/be059275-c554-4960-aa2f-74c2d286f11e/resourceGroups/SpireADF_Prod/providers/Microsoft.Storage/storageAccounts/stseaprodeus2",
+			"events": [
+				"Microsoft.Storage.BlobCreated"
+			]
+		}
+	}
+}

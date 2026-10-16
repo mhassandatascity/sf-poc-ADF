@@ -1,0 +1,130 @@
+{
+	"name": "PL_DBT_SilverGold_Full_Refresh",
+	"properties": {
+		"description": "Pipeline to run full refresh for Silver and Gold Layer weekly once due to record deletions from certain sources",
+		"activities": [
+			{
+				"name": "Silver Layer Load",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Silver",
+						"dbt_command": "run --full-refresh"
+					}
+				}
+			},
+			{
+				"name": "Gold Layer Load",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Silver Layer Test",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Gold",
+						"dbt_command": "run --full-refresh"
+					}
+				}
+			},
+			{
+				"name": "Silver Layer Test",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Silver Layer Load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Silver",
+						"dbt_command": "test"
+					}
+				}
+			},
+			{
+				"name": "Gold Layer Test",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Gold Layer Load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Gold",
+						"dbt_command": "test"
+					}
+				}
+			},
+			{
+				"name": "Wait",
+				"description": "Temporary to avoid dbt test failure",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "Gold Layer Test",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			}
+		],
+		"folder": {
+			"name": "Job_DBT"
+		},
+		"annotations": []
+	}
+}

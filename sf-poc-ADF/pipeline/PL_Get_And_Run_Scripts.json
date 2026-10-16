@@ -1,0 +1,243 @@
+{
+	"name": "PL_Get_And_Run_Scripts",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Script Names",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.scripts_folder",
+								"type": "Expression"
+							},
+							"file": "*.sql",
+							"container": {
+								"value": "@pipeline().parameters.container",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Get SAS URI Base Url",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get Script Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-spire-azureblob-base-url?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get SAS URI SAS Token",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get Script Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-spire-azureblob-sas-token?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Execute SQL Files",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get SAS URI SAS Token",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get SAS URI Base Url",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Script Names').output.childItems",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Get the SQL Query",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": {
+									"value": "@{activity('Get SAS URI Base Url').output.value}/@{pipeline().parameters.container}/@{pipeline().parameters.scripts_folder}/@{item().name}?@{activity('Get SAS URI SAS Token').output.value}",
+									"type": "Expression"
+								},
+								"connectVia": {
+									"referenceName": "SAE-SelfHosted-IR",
+									"type": "IntegrationRuntimeReference"
+								}
+							}
+						},
+						{
+							"name": "Unload to Named Stage",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Get the SQL Query",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_Spire",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"warehouse": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+									"database": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+									"user_name": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+									"role": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+									"account_name": "spireortho-aaas.privatelink"
+								}
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat(\n  'USE SCHEMA MODMEDSTAGING; \n   COPY INTO @ASCENTSTAGING.ASCENT/',\n  pipeline().parameters.current_date_output_folder, \n  '/', \n  replace(item().name, '.sql', '.csv'),\n  ' FROM ( ',\n  activity('Get the SQL Query').output.Response,\n  ' ) FILE_FORMAT = (TYPE = ''CSV'' COMPRESSION = ''NONE'' FIELD_OPTIONALLY_ENCLOSED_BY = ''\"'' NULL_IF = ('''') ) \n    OVERWRITE = TRUE HEADER = TRUE SINGLE = TRUE MAX_FILE_SIZE = 1610612736'\n)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"container": {
+				"type": "string"
+			},
+			"scripts_folder": {
+				"type": "string"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"current_date_output_folder": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Job_Ascent"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,12 @@
+{
+	"name": "SAE-SelfHosted-IR",
+	"properties": {
+		"type": "SelfHosted",
+		"typeProperties": {
+			"linkedInfo": {
+				"resourceId": "/subscriptions/be059275-c554-4960-aa2f-74c2d286f11e/resourcegroups/SpireADF_Prod/providers/Microsoft.DataFactory/factories/adfseaprodeus2/integrationruntimes/SAE-SelfHosted-IR",
+				"authorizationType": "Rbac"
+			}
+		}
+	}
+}

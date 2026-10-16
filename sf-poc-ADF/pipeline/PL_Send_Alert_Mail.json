@@ -1,0 +1,112 @@
+{
+	"name": "PL_Send_Alert_Mail",
+	"properties": {
+		"activities": [
+			{
+				"name": "Send Alert Mail",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get Logic App Url",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": {
+						"value": "@activity('Get Logic App Url').output.value",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": {
+						"value": "{\n    \"body\":\"@{pipeline().parameters.body}\",\n    \"from\":\"@{pipeline().parameters.from}\",\n    \"subject\":\"@{pipeline().parameters.subject}\",\n    \"to\":\"@{join(pipeline().parameters.to,';')}\",\n    \"cc\":\"@{join(pipeline().parameters.cc,';')}\"\n}",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get Logic App Url",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/@{variables('logic_app_url_sec')}?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"from": {
+				"type": "string"
+			},
+			"body": {
+				"type": "string"
+			},
+			"to": {
+				"type": "array"
+			},
+			"cc": {
+				"type": "array"
+			},
+			"bcc": {
+				"type": "array"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"subject": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"body": {
+				"type": "String"
+			},
+			"logic_app_url_sec": {
+				"type": "String",
+				"defaultValue": "sec-logic-app-url"
+			}
+		},
+		"folder": {
+			"name": "Shared_Alerting_Pipelines"
+		},
+		"annotations": []
+	}
+}

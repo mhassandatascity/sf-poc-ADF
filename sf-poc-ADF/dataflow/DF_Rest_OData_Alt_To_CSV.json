@@ -1,0 +1,79 @@
+{
+	"name": "DF_Rest_OData_Alt_To_CSV",
+	"properties": {
+		"folder": {
+			"name": "Shared_OData_Dataflows"
+		},
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DS_Rest_OData_Alt",
+						"type": "DatasetReference"
+					},
+					"name": "RestODataSource"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference"
+					},
+					"name": "CSVSink",
+					"description": "Write to CSV"
+				}
+			],
+			"transformations": [
+				{
+					"name": "FlattenBodyValues",
+					"description": "Flatten Values Array in Body"
+				},
+				{
+					"name": "SelectBody",
+					"description": "Select Body Column Only"
+				},
+				{
+					"name": "RemoveODataColumns",
+					"description": "Remove OData Columns"
+				}
+			],
+			"scriptLines": [
+				"parameters{",
+				"     file_name as string",
+				"}",
+				"source(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     httpMethod: 'GET',",
+				"     timeout: 90,",
+				"     requestInterval: 1,",
+				"     paginationRules: ['absoluteUrl' -> 'body.{@odata.nextLink}'],",
+				"     responseFormat: ['type' -> 'json', 'documentForm' -> 'documentPerLine']) ~> RestODataSource",
+				"SelectBody foldDown(unroll((byPath('body.value')), (byPath('body.value'))),",
+				"     mapColumn(",
+				"          every(match(true()))",
+				"     ),",
+				"     skipDuplicateMapInputs: false,",
+				"     skipDuplicateMapOutputs: false) ~> FlattenBodyValues",
+				"RestODataSource select(mapColumn(",
+				"          each(match(name=='body'))",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> SelectBody",
+				"FlattenBodyValues select(mapColumn(",
+				"          each(match(not(like(name,'%odata%'))))",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> RemoveODataColumns",
+				"RemoveODataColumns sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     partitionFileNames:[($file_name)],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     quoteAll: true,",
+				"     partitionBy('hash', 1)) ~> CSVSink"
+			]
+		}
+	}
+}

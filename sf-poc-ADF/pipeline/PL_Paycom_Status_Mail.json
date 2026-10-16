@@ -1,0 +1,211 @@
+{
+	"name": "PL_Paycom_Status_Mail",
+	"properties": {
+		"activities": [
+			{
+				"name": "If Any Process Failed Or Skipped",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(empty(pipeline().parameters.files_skipped),empty(pipeline().parameters.files_data_process_failed))",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Set Failure Status",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "pipeline_status",
+								"value": {
+									"value": "Paycom Data Load Failed",
+									"type": "Expression"
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Set Success Status",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "pipeline_status",
+								"value": {
+									"value": "Paycom Data Loaded Successfully",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Set Subject",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "If Any Process Failed Or Skipped",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "subject",
+					"value": {
+						"value": "@{variables('pipeline_status')}",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Initial Body",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set Subject",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "body",
+					"value": {
+						"value": "<h1 style='font-weight:bold; font-family:Roboto; font-size:15px; margin-top:0; padding-bottom:0 '>@{variables('pipeline_status')}</h1>\n<p style='margin-top:0; padding-bottom:0'>Below are the status for datasets and files:</p>",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Send Email",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Set Files Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": "https://prod-52.eastus.logic.azure.com:443/workflows/c31233f3b5a542569fd0169cd48d1b3a/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=tUoqG0VDLTYPZceced3F3FAI5dNFf6Z0WCnhS9eSmr0",
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": {
+						"value": "{\n    \"body\":\"@{concat(variables('body'),variables('files_status_text'))}\",\n    \"from\":\"@{pipeline().parameters.from}\",\n    \"subject\":\"@{variables('pipeline_status')}\",\n    \"to\":\"@{join(pipeline().parameters.to,';')}\",\n    \"cc\":\"@{join(pipeline().parameters.cc,';')}\",\n    \"reply_to\":\"@{join(pipeline().parameters.reply_to,';')}\"\n}",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Files Status",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set Initial Body",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "files_status_text",
+					"value": {
+						"value": "@concat(concat(if(empty(pipeline().parameters.files_skipped),'',concat('<p style=font-weight:bold>Files skipped Loading Into Staging Database (due to incorrect naming convention):</p>','<ol style=padding-left:0; list-style-type:decimal><li>',join(pipeline().parameters.files_skipped,'</li><li>'),'</li></ol>'))),concat(if(empty(pipeline().parameters.files_loaded),'',concat('<p style=font-weight:bold>Files Load Succeeded Into The Staging Database:</p>','<ol style=padding-left:0; list-style-type:decimal><li>',join(pipeline().parameters.files_loaded,'</li><li>'),'</li></ol>'))),concat(if(empty(pipeline().parameters.files_data_process_succeeded),'',concat('<p style=font-weight:bold>Data Processing To Load Files Into Replication Database Is Succeeded:</p>','<ol style=padding-left:0; list-style-type:decimal><li>',join(pipeline().parameters.files_data_process_succeeded,'</li><li>'),'</li></ol>'))),concat(if(empty(pipeline().parameters.files_data_process_failed),'',concat('<p style=font-weight:bold>Data Processing To Load Data Into Replication Database Is Failed:</p>','<ol style=padding-left:0; list-style-type:decimal><li>',join(pipeline().parameters.files_data_process_failed,'</li><li>'),'</li></ol>'))),concat(if(empty(pipeline().parameters.files_data_process_skipped),'',concat('<p style=font-weight:bold>Data Processing To Load Files Into Replication Database Is Skipped Due To Previous Failures:</p>','<ol style=padding-left:0; list-style-type:decimal><li>',join(pipeline().parameters.files_data_process_skipped,'</li><li>'),'</li></ol>'))),'<p style=font-weight:bold;>Note: This email is automatically generated.</p>')",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"files_skipped": {
+				"type": "array"
+			},
+			"files_loaded": {
+				"type": "array"
+			},
+			"files_data_process_succeeded": {
+				"type": "array"
+			},
+			"files_data_process_failed": {
+				"type": "array"
+			},
+			"files_data_process_skipped": {
+				"type": "array"
+			},
+			"to": {
+				"type": "array"
+			},
+			"from": {
+				"type": "string"
+			},
+			"reply_to": {
+				"type": "array"
+			},
+			"cc": {
+				"type": "array"
+			}
+		},
+		"variables": {
+			"pipeline_status": {
+				"type": "String"
+			},
+			"subject": {
+				"type": "String"
+			},
+			"body": {
+				"type": "String"
+			},
+			"files_status_text": {
+				"type": "String"
+			},
+			"files_succeeded_text": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_Paycom"
+		},
+		"annotations": []
+	}
+}

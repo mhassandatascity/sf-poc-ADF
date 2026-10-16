@@ -1,0 +1,59 @@
+{
+	"name": "TR_Athena_Every_Sunday_12_45_AM",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_Athena",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"table_load_group": "All",
+					"days_delay": 15,
+					"pbiDatasetInputs": [
+						{
+							"dev": [
+								{
+									"pbiDatasetName": "Athena",
+									"pbiWorkspaceId": "a4b4f778-0dae-4016-af65-0fc5a7511dd2",
+									"pbiDatasetId": "13193829-de5d-4334-9753-77ac3689eedd",
+									"pollingIntervalInSeconds": 60
+								}
+							],
+							"prod": [
+								{
+									"pbiDatasetName": "Athena",
+									"pbiWorkspaceId": "35a1e708-bdc1-433d-ad24-489be6e5e88c",
+									"pbiDatasetId": "683f3e26-d677-4201-a1ae-39ae663c4408",
+									"pollingIntervalInSeconds": 60
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Week",
+				"interval": 1,
+				"startTime": "2023-11-20T20:00:00",
+				"timeZone": "Eastern Standard Time",
+				"schedule": {
+					"minutes": [
+						45
+					],
+					"hours": [
+						0
+					],
+					"weekDays": [
+						"Sunday"
+					]
+				}
+			}
+		}
+	}
+}

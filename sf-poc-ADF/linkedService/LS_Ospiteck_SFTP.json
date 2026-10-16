@@ -1,0 +1,43 @@
+{
+	"name": "LS_Ospiteck_SFTP",
+	"properties": {
+		"parameters": {
+			"sftp_host": {
+				"type": "string",
+				"defaultValue": "sftp.orthori.view2.ospitek.com"
+			},
+			"sftp_user_name": {
+				"type": "string",
+				"defaultValue": "orthori"
+			},
+			"sftp_private_key": {
+				"type": "string",
+				"defaultValue": "sec-ospitek-sftp-priv-key"
+			}
+		},
+		"annotations": [],
+		"type": "Sftp",
+		"typeProperties": {
+			"host": "@{linkedService().sftp_host}",
+			"port": 22,
+			"skipHostKeyValidation": true,
+			"authenticationType": "SshPublicKey",
+			"userName": "@{linkedService().sftp_user_name}",
+			"privateKeyContent": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@{linkedService().sftp_private_key}",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "SAE-SelfHosted-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

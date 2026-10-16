@@ -1,0 +1,31 @@
+{
+	"name": "DS_Clearwave_Blob_Folder",
+	"properties": {
+		"description": "Azure Blob dataset for listing folders under each root category",
+		"linkedServiceName": {
+			"referenceName": "LS_SpireDF_Blob_MSI",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"RootFolder": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Clearwave"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"folderPath": {
+					"value": "@concat('PL_Clearwave/raw/', dataset().RootFolder)",
+					"type": "Expression"
+				},
+				"container": "clearwave"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

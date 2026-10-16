@@ -1,0 +1,40 @@
+{
+	"name": "DS_Snowflake_Spire_AZIR",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Snowflake_Spire_AZIR",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"warehouse": "@dataset().warehouse",
+				"database": "@dataset().database",
+				"user_name": "@dataset().user_name",
+				"role": "@dataset().role",
+				"account_name": "spireortho-aaas.privatelink"
+			}
+		},
+		"parameters": {
+			"warehouse": {
+				"type": "string",
+				"defaultValue": "DEV_ADF_INGESTION_WH"
+			},
+			"database": {
+				"type": "string",
+				"defaultValue": "DEV_RAW"
+			},
+			"user_name": {
+				"type": "string",
+				"defaultValue": "DEV_SVC_ADF"
+			},
+			"role": {
+				"type": "string",
+				"defaultValue": "DEV_SVC_INGESTION_ROLE"
+			}
+		},
+		"folder": {
+			"name": "Snowflake"
+		},
+		"annotations": [],
+		"type": "SnowflakeV2Table",
+		"schema": []
+	}
+}

@@ -1,0 +1,190 @@
+{
+	"name": "PL_DBT_Warehouse_Load",
+	"properties": {
+		"description": "Pipeline to run through silver and gold layer refreshes - to prep for PBI refresh",
+		"activities": [
+			{
+				"name": "Silver Layer Load",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Bronze Flat File Load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Silver",
+						"dbt_command": "run --exclude path:models/Silver/CORE/OADC path:models/Silver/CORE/AthenaHealth"
+					}
+				}
+			},
+			{
+				"name": "Gold Layer Load",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Silver Layer Test",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Gold",
+						"dbt_command": "run --exclude path:models/Gold/ANALYSIS/RCM/OADC_Data_Model path:models/Gold/ANALYSIS/RCM/Athena_Data_Model"
+					}
+				}
+			},
+			{
+				"name": "Silver Layer Test",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Silver Layer Load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Silver",
+						"dbt_command": "test --exclude path:models/Silver/CORE/OADC path:models/Silver/CORE/AthenaHealth"
+					}
+				}
+			},
+			{
+				"name": "Gold Layer Test",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Gold Layer Load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Gold",
+						"dbt_command": "test --exclude path:models/Gold/ANALYSIS/RCM/OADC_Data_Model path:models/Gold/ANALYSIS/RCM/Athena_Data_Model"
+					}
+				}
+			},
+			{
+				"name": "Bronze Flat File Load",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/SPIRE_INTERNAL_DATA",
+						"dbt_command": "run"
+					}
+				}
+			},
+			{
+				"name": "Check for pbiDatasetInputs",
+				"description": "check if pbiDatasetInputs is not empty before triggering pbi datamodel refresh",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Gold Layer Test",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(length(pipeline().parameters.pbiDatasetInputs), 0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Refresh PBI",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_PBI_Dataset_Inputs",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"pbiDatasetInputs": {
+										"value": "@pipeline().parameters.pbiDatasetInputs",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"pbiDatasetInputs": {
+				"type": "array",
+				"defaultValue": []
+			}
+		},
+		"folder": {
+			"name": "Shared_DBT_Pipelines"
+		},
+		"annotations": []
+	}
+}

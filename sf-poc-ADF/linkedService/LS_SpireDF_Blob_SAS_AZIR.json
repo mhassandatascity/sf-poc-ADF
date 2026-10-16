@@ -1,0 +1,26 @@
+{
+	"name": "LS_SpireDF_Blob_SAS_AZIR",
+	"properties": {
+		"parameters": {
+			"auth_sas_url_sec": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AzureBlobStorage",
+		"typeProperties": {
+			"sasUri": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "@string(linkedService().auth_sas_url_sec)"
+			}
+		},
+		"connectVia": {
+			"referenceName": "SAE-Azure-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

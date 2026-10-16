@@ -1,0 +1,29 @@
+{
+	"name": "TR_Spire_Ondemand_Storage_Event",
+	"properties": {
+		"description": "Storage Trigger to process files uploaded to blob by Spire",
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_DBT_Warehouse_Load",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"pbiDatasetInputs": []
+				}
+			}
+		],
+		"type": "BlobEventsTrigger",
+		"typeProperties": {
+			"blobPathBeginsWith": "/spire-ondemand/blobs/PL_Spire_OnDemand/",
+			"blobPathEndsWith": ".csv",
+			"ignoreEmptyBlobs": true,
+			"scope": "/subscriptions/be059275-c554-4960-aa2f-74c2d286f11e/resourceGroups/SpireADF_Dev/providers/Microsoft.Storage/storageAccounts/stseadeveus2",
+			"events": [
+				"Microsoft.Storage.BlobCreated"
+			]
+		}
+	}
+}

@@ -1,0 +1,68 @@
+{
+	"name": "PL_Spire_OnDemand",
+	"properties": {
+		"description": "Pipeline to process files uploaded to blob by Spire (Michael Woods)",
+		"activities": [
+			{
+				"name": "Wait1",
+				"description": "Test Storage events",
+				"type": "Wait",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 5
+				}
+			}
+		],
+		"variables": {
+			"src_container": {
+				"type": "String",
+				"defaultValue": "provider-bonus-plans"
+			},
+			"src_path": {
+				"type": "String",
+				"defaultValue": "filedrops"
+			},
+			"src_file": {
+				"type": "String",
+				"defaultValue": "Bonus Plans.xlsx"
+			},
+			"target_db": {
+				"type": "String",
+				"defaultValue": "AM_DB"
+			},
+			"target_table_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"target_table": {
+				"type": "String",
+				"defaultValue": "Provider_Bonus_Table"
+			},
+			"write_mode": {
+				"type": "String",
+				"defaultValue": "truncate"
+			},
+			"target_archive_path": {
+				"type": "String",
+				"defaultValue": "archive"
+			},
+			"backup_existing_table": {
+				"type": "Boolean",
+				"defaultValue": true
+			},
+			"restore_existing_table": {
+				"type": "Boolean",
+				"defaultValue": true
+			},
+			"src_file_type": {
+				"type": "String",
+				"defaultValue": "xlsx"
+			}
+		},
+		"folder": {
+			"name": "Job_Data_Refresh_From_Files"
+		},
+		"annotations": []
+	}
+}

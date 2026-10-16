@@ -1,0 +1,53 @@
+{
+	"name": "DS_AzureBlob_Athena_Lookup_CSV",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SpireDF_Blob_SAS",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"auth_sas_url_sec": "@dataset().auth_sas_url_sec"
+			}
+		},
+		"parameters": {
+			"path": {
+				"type": "string"
+			},
+			"file": {
+				"type": "string"
+			},
+			"container": {
+				"type": "String"
+			},
+			"auth_sas_url_sec": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Athena"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@dataset().file",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().path",
+					"type": "Expression"
+				},
+				"container": {
+					"value": "@dataset().container",
+					"type": "Expression"
+				}
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}

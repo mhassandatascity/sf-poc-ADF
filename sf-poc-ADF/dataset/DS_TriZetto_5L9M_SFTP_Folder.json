@@ -1,0 +1,30 @@
+{
+	"name": "DS_TriZetto_5L9M_SFTP_Folder",
+	"properties": {
+		"description": "SFTP dataset for listing files in the TriZetto 5L9M mailbox",
+		"linkedServiceName": {
+			"referenceName": "LS_TriZetto_5L9M_SFTP",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"remote_directory": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "TriZetto"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "SftpLocation",
+				"folderPath": {
+					"value": "@dataset().remote_directory",
+					"type": "Expression"
+				}
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

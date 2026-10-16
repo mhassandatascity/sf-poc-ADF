@@ -1,0 +1,620 @@
+{
+	"name": "PL_Fetch_Table_Column_Names",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Table Names",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Set session_id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_JSON",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.config_container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.config_container_folder",
+								"type": "Expression"
+							},
+							"file": {
+								"value": "@pipeline().parameters.config_file",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Load All Table Columns",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get Table Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Table Names').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 8,
+					"activities": [
+						{
+							"name": "Get Table Columns",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": true
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@item().table_name"
+								}
+							],
+							"typeProperties": {
+								"method": "POST",
+								"headers": {
+									"Content-Type": "application/xml"
+								},
+								"url": "https://api.intacct.com/ia/xml/xmlgw.phtml/",
+								"connectVia": {
+									"referenceName": "SAE-SelfHosted-IR",
+									"type": "IntegrationRuntimeReference"
+								},
+								"body": {
+									"value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n  <control>\n    <senderid>@{activity('Get Control SenderId').output.value}</senderid>\n    <password>@{activity('Get Control Password').output.value}</password>\n    <controlid>@{div(sub(ticks(utcNow()), ticks('1970-01-01')),10000000)}</controlid>\n    <uniqueid>false</uniqueid>\n    <dtdversion>3.0</dtdversion>\n    <includewhitespace>false</includewhitespace>\n  </control>\n  <operation>\n    <authentication>\n      <sessionid>@{variables('session_id')}</sessionid>\n    </authentication>\n    <content>\n      <function controlid=\"@{guid()}\">\n        <lookup>\n          <object>@{item().table_name}</object>\n        </lookup>\n      </function>\n    </content>\n  </operation>\n</request>",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "If Response Recieved Successfully",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Wait 2 seconds",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@not(contains(activity('Get Table Columns').output.Response,'<status>failure</status>'))",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Fail  With Response Error Message",
+										"type": "Fail",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"message": {
+												"value": "@activity('Get Table Columns').output.Response",
+												"type": "Expression"
+											},
+											"errorCode": "200"
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Copy Column Data",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "Create XML Columns",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@item().table_name"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "JsonSource",
+												"additionalColumns": [
+													{
+														"name": "columns",
+														"value": {
+															"value": "@string(json(xml(activity('Get Table Columns').output.Response))['response']['operation']['result']['data']['Type']['Fields']['Field'])",
+															"type": "Expression"
+														}
+													},
+													{
+														"name": "xml_columns",
+														"value": {
+															"value": "@activity('Create XML Columns').output.pipelineReturnValue.columns",
+															"type": "Expression"
+														}
+													}
+												],
+												"storeSettings": {
+													"type": "AzureBlobStorageReadSettings",
+													"recursive": true,
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "JsonReadSettings"
+												}
+											},
+											"sink": {
+												"type": "JsonSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "JsonWriteSettings"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"mappings": [
+													{
+														"source": {
+															"path": "$['columns']"
+														},
+														"sink": {
+															"type": "String",
+															"path": "columns"
+														}
+													},
+													{
+														"source": {
+															"path": "$['xml_columns']"
+														},
+														"sink": {
+															"type": "String",
+															"path": "xml_columns"
+														}
+													}
+												],
+												"collectionReference": ""
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_JSON",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.config_container",
+														"type": "Expression"
+													},
+													"path": "dummy",
+													"file": "dummy.json"
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_JSON",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@{pipeline().parameters.metadata_output_path}/preload_metadata",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@{item().table_name}.json",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "Create XML Columns",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@item().table_name"
+											}
+										],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "PL_Load_Table_Column_Names",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"columns": {
+													"value": "@json(xml(activity('Get Table Columns').output.Response))['response']['operation']['result']['data']['Type']['Fields']['Field']",
+													"type": "Expression"
+												},
+												"additional_columns": {
+													"value": "@item()['columns']",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Wait 2 seconds",
+							"type": "Wait",
+							"dependsOn": [
+								{
+									"activity": "Get Table Columns",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 2
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get New API Session",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get Control SenderId",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get Control Password",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get Auth UserId",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get Auth Password",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get Auth CompanyId",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/xml"
+					},
+					"url": "https://api.intacct.com/ia/xml/xmlgw.phtml/",
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": {
+						"value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n  <control>\n    <senderid>@{activity('Get Control SenderId').output.value}</senderid>\n    <password>@{activity('Get Control Password').output.value}</password>\n    <controlid>@{div(sub(ticks(utcNow()), ticks('1970-01-01')),10000000)}</controlid>\n    <uniqueid>false</uniqueid>\n    <dtdversion>3.0</dtdversion>\n    <includewhitespace>false</includewhitespace>\n  </control>\n  <operation>\n    <authentication>\n      <login>\n        <userid>@{activity('Get Auth UserId').output.value}</userid>\n        <companyid>@{activity('Get Auth CompanyId').output.value}</companyid>\n        <password>@{activity('Get Auth Password').output.value}</password>\n      </login>\n    </authentication>\n    <content>\n      <function controlid=\"@{guid()}\">\n        <getAPISession />\n      </function>\n    </content>\n  </operation>\n</request>",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set session_id",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Get New API Session",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "session_id",
+					"value": {
+						"value": "@json(xml(activity('Get New API Session').output.Response))['response']['operation']['result']['data']['api']['sessionid']",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "return session_id",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Load All Table Columns",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "session_id",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('session_id')"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			},
+			{
+				"name": "Get Control SenderId",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-sageintacct-control-senderid?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get Control Password",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-sageintacct-control-password?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "Get Auth UserId",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-sageintacct-auth-userid?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "Get Auth Password",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-sageintacct-auth-password?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "Get Auth CompanyId",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-sageintacct-auth-companyid?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"config_file": {
+				"type": "string"
+			},
+			"config_container": {
+				"type": "string"
+			},
+			"config_container_folder": {
+				"type": "string"
+			},
+			"tgt_container": {
+				"type": "string"
+			},
+			"metadata_output_path": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"session_id": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_SageIntacct"
+		},
+		"annotations": []
+	}
+}

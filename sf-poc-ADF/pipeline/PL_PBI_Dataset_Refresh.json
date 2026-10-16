@@ -1,0 +1,384 @@
+{
+	"name": "PL_PBI_Dataset_Refresh",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set Workspace Dataset Name",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "DatasetName",
+					"value": {
+						"value": "@concat('Starting refresh for data model: ', pipeline().parameters.pbiDatasetName)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get tenantId from AKV",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-pbi-tenantid?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get clientId from AKV",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-pbi-sp-clientid?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get clientSecret from AKV",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-pbi-sp-clientsecret?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get AAD Token",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get tenantId from AKV",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get clientId from AKV",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get clientSecret from AKV",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/x-www-form-urlencoded"
+					},
+					"url": {
+						"value": "@concat(pipeline().parameters.authBaseUrl, activity('Get tenantId from AKV').output.value, pipeline().parameters.authTokenEndpoint)",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": {
+						"value": "@concat('grant_type=client_credentials&resource=https://analysis.windows.net/powerbi/api&client_id=', activity('Get clientId from AKV').output.value, '&client_secret=', encodeUriComponent(activity('Get clientSecret from AKV').output.value))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Trigger PBI dataset refresh",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get AAD Token",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Authorization": {
+							"value": "@concat(activity('Get AAD Token').output.token_type, ' ', activity('Get AAD Token').output.access_token)",
+							"type": "Expression"
+						}
+					},
+					"url": {
+						"value": "@concat('https://api.powerbi.com/v1.0/myorg/groups/', pipeline().parameters.pbiWorkspaceId, '/datasets/', pipeline().parameters.pbiDatasetId, '/refreshes')",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": {
+						"hello": "world"
+					}
+				}
+			},
+			{
+				"name": "Until Dataset Refresh Completes",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Trigger PBI dataset refresh",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(\n  equals(coalesce(first(activity('Get Latest Dataset Refresh Status').output.value).status, ''), 'Completed'),\n  equals(coalesce(first(activity('Get Latest Dataset Refresh Status').output.value).status, ''), 'Failed')\n)\n",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Get AAD Token2",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": true,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "POST",
+								"headers": {
+									"Content-Type": "application/x-www-form-urlencoded"
+								},
+								"url": {
+									"value": "@concat(pipeline().parameters.authBaseUrl, activity('Get tenantId from AKV').output.value, pipeline().parameters.authTokenEndpoint)",
+									"type": "Expression"
+								},
+								"body": {
+									"value": "@concat('grant_type=client_credentials&resource=https://analysis.windows.net/powerbi/api&client_id=', activity('Get clientId from AKV').output.value, '&client_secret=', encodeUriComponent(activity('Get clientSecret from AKV').output.value))",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Wait Between Checks",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": {
+									"value": "@pipeline().parameters.pollingIntervalInSeconds",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Get Latest Dataset Refresh Status",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Get AAD Token2",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"retry": 3,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"headers": {
+									"Authorization": {
+										"value": "@concat(activity('Get AAD Token2').output.token_type, ' ', activity('Get AAD Token2').output.access_token)",
+										"type": "Expression"
+									}
+								},
+								"url": {
+									"value": "@concat('https://api.powerbi.com/v1.0/myorg/groups/', pipeline().parameters.pbiWorkspaceId, '/datasets/', pipeline().parameters.pbiDatasetId, '/refreshes?$orderby=createdDateTime desc&$top=1')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "PBI Refresh Status",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Until Dataset Refresh Completes",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "RefreshStatus",
+					"value": {
+						"value": "@first(activity('Get Latest Dataset Refresh Status').output.value).status",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Check Status for Failure",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "PBI Refresh Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(variables('RefreshStatus'), 'Failed')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "PBI data model refresh",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Refresh failed",
+								"errorCode": "500"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"pbiDatasetName": {
+				"type": "string"
+			},
+			"pbiWorkspaceId": {
+				"type": "string"
+			},
+			"pbiDatasetId": {
+				"type": "string"
+			},
+			"pollingIntervalInSeconds": {
+				"type": "int",
+				"defaultValue": 180
+			},
+			"authBaseUrl": {
+				"type": "string",
+				"defaultValue": "https://login.microsoftonline.com/"
+			},
+			"authTokenEndpoint": {
+				"type": "string",
+				"defaultValue": "/oauth2/token"
+			}
+		},
+		"variables": {
+			"RefreshStatus": {
+				"type": "String"
+			},
+			"DatasetName": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Shared_PBI_Refresh_Pipelines"
+		},
+		"annotations": []
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

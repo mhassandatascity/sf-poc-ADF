@@ -1,0 +1,52 @@
+{
+	"name": "DS_Snowflake_Spire",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Snowflake_Spire",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"warehouse": {
+					"value": "@dataset().warehouse",
+					"type": "Expression"
+				},
+				"database": {
+					"value": "@dataset().database",
+					"type": "Expression"
+				},
+				"user_name": {
+					"value": "@dataset().user_name",
+					"type": "Expression"
+				},
+				"role": {
+					"value": "@dataset().role",
+					"type": "Expression"
+				},
+				"account_name": "spireortho-aaas.privatelink"
+			}
+		},
+		"parameters": {
+			"warehouse": {
+				"type": "string",
+				"defaultValue": "DEV_ADF_INGESTION_WH"
+			},
+			"database": {
+				"type": "string",
+				"defaultValue": "DEV_RAW"
+			},
+			"user_name": {
+				"type": "string",
+				"defaultValue": "DEV_SVC_ADF"
+			},
+			"role": {
+				"type": "string",
+				"defaultValue": "DEV_SVC_INGESTION_ROLE"
+			}
+		},
+		"folder": {
+			"name": "Snowflake"
+		},
+		"annotations": [],
+		"type": "SnowflakeV2Table",
+		"schema": []
+	}
+}

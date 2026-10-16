@@ -1,0 +1,786 @@
+{
+	"name": "PL_OADC",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Table List PM",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Fetch_Source_Table_Configs",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"table": {
+							"value": "@variables('config_table_name')",
+							"type": "Expression"
+						},
+						"table_schema": {
+							"value": "@variables('config_table_schema')",
+							"type": "Expression"
+						},
+						"addl_tbl_filter": "\"Schema\"='PM'"
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths PM",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Get Table List PM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "PM",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "PL_DBT_LOG_FILE_FOLDER_SF",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths PM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_LOG_FILE_FOLDER_SF",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"FolderDate": {
+							"value": "@activity('Execute PL_Output_Paths PM').output.pipelineReturnValue.data_folder_path",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "ForEachTable PM",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths PM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Table List PM').output.pipelineReturnValue.TableNames",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "current_table",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "current_table",
+								"value": {
+									"value": "@item().Table",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Copy data1",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "current_table",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "table_name",
+									"value": "@{item().Table}"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@concat('SELECT * FROM [', item().Schema, '].[', item().Table, ']')\n",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_SqlServer_OADC",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema": "*",
+										"table": "*"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+										"path": {
+											"value": "@replace(\n    activity('Execute PL_Output_Paths PM').output.pipelineReturnValue.data_output_path,\n    'oadc_schema',\n    item().Schema\n)",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@{item().Table}.csv",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "DBT Ingest OADC",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "ForEachTable PM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "ForEachTable HIE_PM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/OADCReplicated",
+						"dbt_command": "run"
+					}
+				}
+			},
+			{
+				"name": "DBT Test OADC",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Ingest OADC",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/OADCReplicated",
+						"dbt_command": "test"
+					}
+				}
+			},
+			{
+				"name": "Get Table List HIE_PM",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Fetch_Source_Table_Configs",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"table": {
+							"value": "@variables('config_table_name')",
+							"type": "Expression"
+						},
+						"table_schema": {
+							"value": "@variables('config_table_schema')",
+							"type": "Expression"
+						},
+						"addl_tbl_filter": "\"Schema\"='HIE_PM'"
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths HIE_PM",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Get Table List HIE_PM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "HIE_PM",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "PL_DBT_LOG_FILE_FOLDER_SF_copy1",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths HIE_PM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_LOG_FILE_FOLDER_SF",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"FolderDate": {
+							"value": "@activity('Execute PL_Output_Paths HIE_PM').output.pipelineReturnValue.data_folder_path",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "ForEachTable HIE_PM",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths HIE_PM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Table List HIE_PM').output.pipelineReturnValue.TableNames",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "current_table_copy1",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "current_table",
+								"value": {
+									"value": "@item().Table",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Copy data1_copy1",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "current_table_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "table_name",
+									"value": "@{item().Table}"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@concat('SELECT * FROM [', item().Schema, '].[', item().Table, ']')\n",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_SqlServer_OADC",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema": "*",
+										"table": "*"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+										"path": {
+											"value": "@replace(\n    activity('Execute PL_Output_Paths HIE_PM').output.pipelineReturnValue.data_output_path,\n    'oadc_schema',\n    item().Schema\n)",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@{item().Table}.csv",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "DBT Silver Load OADC",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Test OADC",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Silver/CORE/OADC+,+path:models/Gold/ANALYSIS/RCM/OADC_Data_Model",
+						"dbt_command": "run"
+					}
+				}
+			},
+			{
+				"name": "DBT Silver Test OADC",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Silver Load OADC",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Silver/CORE/OADC+,+path:models/Gold/ANALYSIS/RCM/OADC_Data_Model",
+						"dbt_command": "test"
+					}
+				}
+			},
+			{
+				"name": "DBT Gold Load OADC",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Silver Test OADC",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Gold/ANALYSIS/RCM/OADC_Data_Model",
+						"dbt_command": "run"
+					}
+				}
+			},
+			{
+				"name": "DBT Gold Test OADC",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Gold Load OADC",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Gold/ANALYSIS/RCM/OADC_Data_Model",
+						"dbt_command": "test"
+					}
+				}
+			},
+			{
+				"name": "Refresh OADC PBI Datamodel",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set pbiDatasetInput",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_PBI_Dataset_Inputs",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"pbiDatasetInputs": {
+							"value": "@variables('staged_pbiDataset_inputs')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set pbiDatasetInput",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "DBT Gold Test OADC",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "staged_pbiDataset_inputs",
+					"value": {
+						"value": "@if(greater(length(pipeline().parameters.pbiDatasetInputs), 0), pipeline().parameters.pbiDatasetInputs[0][pipeline().globalParameters.ENV_STAGE], json('[]'))",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"policy": {
+			"elapsedTimeMetric": {
+				"duration": "00.01:40:00"
+			}
+		},
+		"parameters": {
+			"pbiDatasetInputs": {
+				"type": "array",
+				"defaultValue": []
+			}
+		},
+		"variables": {
+			"tgt_db": {
+				"type": "String",
+				"defaultValue": "oadcReplicated"
+			},
+			"restore_sp_db": {
+				"type": "String",
+				"defaultValue": "etl_metadata"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "oadcblob01"
+			},
+			"tgt_schema": {
+				"type": "String",
+				"defaultValue": "oadc_schema"
+			},
+			"config_fie": {
+				"type": "String",
+				"defaultValue": "src_table_list.json"
+			},
+			"config_container": {
+				"type": "String",
+				"defaultValue": "utility"
+			},
+			"restored_db": {
+				"type": "String",
+				"defaultValue": "oadcStaging"
+			},
+			"restore_sp": {
+				"type": "String",
+				"defaultValue": "oadc_Gen_RestoreStagingDatabase"
+			},
+			"restore_sp_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"create_user_sp": {
+				"type": "String",
+				"defaultValue": "oadc_StagingDatabase_addUsers"
+			},
+			"create_user_sp_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"restore_staging_db_sp": {
+				"type": "String",
+				"defaultValue": "oadc_Gen_RestoreStagingDatabase"
+			},
+			"restore_replication_db_sp": {
+				"type": "String",
+				"defaultValue": "oadc_Gen_RestoreReplicatedDatabase"
+			},
+			"create_staging_users_sp": {
+				"type": "String",
+				"defaultValue": "oadc_StagingDatabase_addUsers"
+			},
+			"create_replication_users_sp": {
+				"type": "String",
+				"defaultValue": "oadc_ReplicatedDatabase_addUsers"
+			},
+			"schema_comparision_sp": {
+				"type": "String",
+				"defaultValue": "oadc_SchemaComparison"
+			},
+			"row_count_comparision_sp": {
+				"type": "String",
+				"defaultValue": "oadc_RowCountComparison"
+			},
+			"config_database": {
+				"type": "String",
+				"defaultValue": "DEV_META"
+			},
+			"config_table_schema": {
+				"type": "String",
+				"defaultValue": "ETL_METADATA"
+			},
+			"config_table_name": {
+				"type": "String",
+				"defaultValue": "ADF_OADC_SOURCE_TABLE_CONFIGS"
+			},
+			"config_file_folder": {
+				"type": "String"
+			},
+			"schema": {
+				"type": "String"
+			},
+			"current_table": {
+				"type": "String"
+			},
+			"staged_pbiDataset_inputs": {
+				"type": "Array",
+				"defaultValue": []
+			}
+		},
+		"folder": {
+			"name": "Job_OADC"
+		},
+		"annotations": [],
+		"lastPublishTime": "2024-12-21T14:35:50Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

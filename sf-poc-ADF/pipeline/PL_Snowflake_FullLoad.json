@@ -1,0 +1,346 @@
+{
+	"name": "PL_Snowflake_FullLoad",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetConfigData",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Snowflake stage path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set config table path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set file format path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "@concat('SELECT file_pattern, target_table_name, column_definitions FROM ', variables('set_config_table_path'))",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_Snowflake_Spire",
+						"type": "DatasetReference",
+						"parameters": {
+							"warehouse": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+							"database": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+								"type": "Expression"
+							},
+							"user_name": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+							"role": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEachConfig",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "GetConfigData",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetConfigData').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 20,
+					"activities": [
+						{
+							"name": "ExecuteSnowflakeCopy",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "TruncateTable",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_Spire",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"warehouse": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+										"type": "Expression"
+									},
+									"database": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+										"type": "Expression"
+									},
+									"user_name": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+										"type": "Expression"
+									},
+									"role": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+										"type": "Expression"
+									},
+									"account_name": "spireortho-aaas.privatelink"
+								}
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',variables('set_schema_path'),'.', item().target_table_name,\n  ' FROM ( SELECT ', item().column_definitions, \n  ' FROM @',variables('set_snowflake_stage_path'),') PATTERN=''.*', pipeline().parameters.data_folder_path, '.*_', \n  item().file_pattern, '_.*\\\\.csv'' FILE_FORMAT = ',variables('set_file_format_path'),';'\n)",
+											"type": "Expression"
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "TruncateTable",
+							"description": "",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_Spire",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"warehouse": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+										"type": "Expression"
+									},
+									"database": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+										"type": "Expression"
+									},
+									"user_name": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+										"type": "Expression"
+									},
+									"role": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+										"type": "Expression"
+									},
+									"account_name": "spireortho-aaas.privatelink"
+								}
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat('TRUNCATE TABLE ',variables('set_schema_path'),'.', item().target_table_name)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "If Errors",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "ExecuteSnowflakeCopy",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@or(contains(string(activity('ExecuteSnowflakeCopy').output.resultSets[0].rows), '\\\"status\\\":\\\"FAILED\\\"'), contains(string(activity('ExecuteSnowflakeCopy').output.resultSets[0].rows), '\\\"errors_seen\\\":\\\"1\\\"'))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Fail1",
+										"type": "Fail",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"message": {
+												"value": "@concat('Snowflake load failed - \n    File loaded: ', activity('ExecuteSnowflakeCopy').output.resultSets[0].rows[0]['file'], ',\n    Target table: DEV_RAW.PAYCOMSTAGING.', item().target_table_name ,'\n    Rows loaded: ', activity('ExecuteSnowflakeCopy').output.resultSets[0].rows[0]['rows_loaded'], ', \n    Errors seen: ', activity('ExecuteSnowflakeCopy').output.resultSets[0].rows[0]['errors_seen']\n)",
+												"type": "Expression"
+											},
+											"errorCode": "SNOWFLAKE_LOAD_VALIDATION_FAILED"
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Snowflake stage path",
+				"description": "fully-qualified stage path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set schema path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "set_snowflake_stage_path",
+					"value": {
+						"value": "@concat(variables('set_schema_path'),'.',pipeline().parameters.snowflake_stage)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set schema path",
+				"description": "<database_name>.<schema_name>",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "set_schema_path",
+					"value": {
+						"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',toUpper(pipeline().parameters.tgt_schema))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set config table path",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "set_config_table_path",
+					"value": {
+						"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE),'_META.ETL_METADATA.', pipeline().parameters.config_table)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set file format path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set schema path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "set_file_format_path",
+					"value": {
+						"value": "@concat(variables('set_schema_path'),'.',pipeline().parameters.snowflake_file_format)",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"snowflake_stage": {
+				"type": "string"
+			},
+			"snowflake_file_format": {
+				"type": "string"
+			},
+			"config_table": {
+				"type": "string"
+			},
+			"tgt_schema": {
+				"type": "string"
+			},
+			"data_folder_path": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"set_schema_path": {
+				"type": "String"
+			},
+			"set_snowflake_stage_path": {
+				"type": "String"
+			},
+			"set_config_table_path": {
+				"type": "String"
+			},
+			"set_file_format_path": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Shared_Snowflake_Pipelines"
+		},
+		"annotations": [],
+		"lastPublishTime": "2024-01-01T00:00:00Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

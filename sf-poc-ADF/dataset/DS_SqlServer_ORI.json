@@ -1,0 +1,33 @@
+{
+	"name": "DS_SqlServer_ORI",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SQLServer_ORI",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"database": "centricityps"
+			}
+		},
+		"parameters": {
+			"schema": {
+				"type": "string"
+			},
+			"table": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": {
+				"value": "@dataset().schema",
+				"type": "Expression"
+			},
+			"table": {
+				"value": "@dataset().table",
+				"type": "Expression"
+			}
+		}
+	}
+}

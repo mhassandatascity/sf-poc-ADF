@@ -1,0 +1,293 @@
+{
+	"name": "PL_MCAOS",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute PL_OData_Data_Fetch",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set tgt_container_folder",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_OData_Data_Fetch",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"src_odata_url_sec": {
+							"value": "@variables('src_odata_url_sec')",
+							"type": "Expression"
+						},
+						"src_odata_user_sec": {
+							"value": "@variables('src_odata_user_sec')",
+							"type": "Expression"
+						},
+						"src_odata_password_sec": {
+							"value": "@variables('src_odata_password_sec')",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"tgt_container_folder": {
+							"value": "@variables('tgt_container_folder')",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						},
+						"tgt_data_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"entities_require_data_flow_copy": {
+							"value": "@createArray('Cases', 'CaseTimes', 'CaseProcedures', 'StaffTimes','Transactions')",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"config_database": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_META')",
+							"type": "Expression"
+						},
+						"config_table": {
+							"value": "@variables('config_table')",
+							"type": "Expression"
+						},
+						"config_source_key": {
+							"value": "@variables('source_key')",
+							"type": "Expression"
+						},
+						"config_table_schema": {
+							"value": "@variables('config_table_schema')",
+							"type": "Expression"
+						},
+						"load_group": {
+							"value": "@variables('load_group')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set tgt_container_folder",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "tgt_container_folder",
+					"value": {
+						"value": "@pipeline().Pipeline",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "PL_DBT_LOG_FILE_FOLDER_SF",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_LOG_FILE_FOLDER_SF",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"FolderDate": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "DBT Ingest MCAOS",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_OData_Data_Fetch",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/MCAOS_Replicated"
+					}
+				}
+			},
+			{
+				"name": "DBT Test MCAOS",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Ingest MCAOS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/MCAOS_Replicated",
+						"dbt_command": "test"
+					}
+				}
+			}
+		],
+		"policy": {
+			"elapsedTimeMetric": {
+				"duration": "00.00:25:00"
+			}
+		},
+		"variables": {
+			"src_odata_url_sec": {
+				"type": "String",
+				"defaultValue": "sec-mcaos-odata-service-url"
+			},
+			"src_odata_user_sec": {
+				"type": "String",
+				"defaultValue": "sec-mcaos-odata-auth-user"
+			},
+			"src_odata_password_sec": {
+				"type": "String",
+				"defaultValue": "sec-mcaos-odata-auth-password"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "mcaos"
+			},
+			"tgt_db": {
+				"type": "String",
+				"defaultValue": "MCAOS_Replicated"
+			},
+			"tgt_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"tgt_container_folder": {
+				"type": "String"
+			},
+			"config_database": {
+				"type": "String",
+				"defaultValue": "DEV_META"
+			},
+			"config_table": {
+				"type": "String",
+				"defaultValue": "adf_source_table_configs"
+			},
+			"config_table_schema": {
+				"type": "String",
+				"defaultValue": "etl_metadata"
+			},
+			"source_key": {
+				"type": "String",
+				"defaultValue": "13"
+			},
+			"load_group": {
+				"type": "String",
+				"defaultValue": "Priority"
+			}
+		},
+		"folder": {
+			"name": "Job_MCAOS"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,823 @@
+{
+	"name": "PL_AzureBlob_Data_Fetch_XLSX_To_CSV",
+	"properties": {
+		"activities": [
+			{
+				"name": "Move Data From File Drop",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"wildcardFolderPath": {
+								"value": "@pipeline().parameters.src_container_folder",
+								"type": "Expression"
+							},
+							"wildcardFileName": "*.xlsx",
+							"deleteFilesAfterCompletion": true
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.src_container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.src_container_folder",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.tgt_container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.excel_output_path",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "Get XLSX File Names",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Move Data From File Drop",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.tgt_container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.excel_output_path",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems",
+						"exists"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "For Each XLSX Mapping",
+				"description": "Create mapping of actual file names to destination file names",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "If XLSX Files Exist",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get Table List",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Table List').output.pipelineReturnValue.TableNames",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Set curr_mapping_pattern",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().output_file}"
+								}
+							],
+							"typeProperties": {
+								"variableName": "curr_mapping_pattern",
+								"value": {
+									"value": "@item().input_file_pattern",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Filter For File By Pattern",
+							"type": "Filter",
+							"dependsOn": [
+								{
+									"activity": "Set curr_mapping_pattern",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().output_file}"
+								}
+							],
+							"typeProperties": {
+								"items": {
+									"value": "@variables('xlsx_file_list')",
+									"type": "Expression"
+								},
+								"condition": {
+									"value": "@contains(item().name, variables('curr_mapping_pattern'))",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "If Exists File With Pattern Match",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Filter For File By Pattern",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().output_file}"
+								}
+							],
+							"typeProperties": {
+								"expression": {
+									"value": "@greater(activity('Filter For File By Pattern').output.FilteredItemsCount, 0)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Set curr_mapping_json_str",
+										"description": "create a json string for the full mapping",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().output_file}"
+											}
+										],
+										"typeProperties": {
+											"variableName": "curr_mapping_json_str",
+											"value": {
+												"value": "{\n    \"input_file\": \"@{activity('Filter For File By Pattern').output.value[0].name}\",\n    \"sheet_index\": @{item().sheet_index}, \n    \"range_start\": \"@{item().range_start}\", \n    \"first_row_as_header\": @{toLower(string(item().first_row_as_header))},\n    \"output_file\": \"@{item().output_file}\", \n    \"use_dataflow_for_copy\": @{toLower(string(item().use_dataflow_for_copy))}\n}",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "Append xlsx_to_csv_mapping",
+										"type": "AppendVariable",
+										"dependsOn": [
+											{
+												"activity": "Set curr_mapping_json_str",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().output_file}"
+											}
+										],
+										"typeProperties": {
+											"variableName": "xlsx_to_csv_mapping",
+											"value": {
+												"value": "@json(variables('curr_mapping_json_str'))",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "For Each Final Mapping",
+				"description": "Use final mapping to copy data from source file to destination csv",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "For Each XLSX Mapping",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('xlsx_to_csv_mapping')",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "Check If Copy With Data Flow",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().output_file}"
+								}
+							],
+							"typeProperties": {
+								"expression": {
+									"value": "@item().use_dataflow_for_copy",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Copy XLSX to CSV",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().output_file}"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "ExcelSource",
+												"storeSettings": {
+													"type": "AzureBlobStorageReadSettings",
+													"recursive": true,
+													"enablePartitionDiscovery": false
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false,
+											"validateDataConsistency": true,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": false,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_XLSX",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.excel_output_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().input_file",
+														"type": "Expression"
+													},
+													"range_start": {
+														"value": "@item().range_start",
+														"type": "Expression"
+													},
+													"sheet_index": {
+														"value": "@item().sheet_index",
+														"type": "Expression"
+													},
+													"first_row_as_header": {
+														"value": "@item().first_row_as_header",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.data_output_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().output_file",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Data Flow Copy XLSX to CSV",
+										"type": "ExecuteDataFlow",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().output_file}"
+											}
+										],
+										"typeProperties": {
+											"dataflow": {
+												"referenceName": "DF_XLSX_To_CSV",
+												"type": "DataFlowReference",
+												"parameters": {
+													"file_name": {
+														"value": "'@{item().output_file}'",
+														"type": "Expression"
+													}
+												},
+												"datasetParameters": {
+													"ExcelSource": {
+														"auth_sas_url_sec": {
+															"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+															"type": "Expression"
+														},
+														"container": {
+															"value": "@pipeline().parameters.tgt_container",
+															"type": "Expression"
+														},
+														"path": {
+															"value": "@pipeline().parameters.excel_output_path",
+															"type": "Expression"
+														},
+														"file": {
+															"value": "@item().input_file",
+															"type": "Expression"
+														},
+														"range_start": {
+															"value": "@item().range_start",
+															"type": "Expression"
+														},
+														"sheet_index": {
+															"value": "@item().sheet_index",
+															"type": "Expression"
+														},
+														"first_row_as_header": {
+															"value": "@item().first_row_as_header",
+															"type": "Expression"
+														}
+													},
+													"CSVSink": {
+														"auth_sas_url_sec": {
+															"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+															"type": "Expression"
+														},
+														"path": {
+															"value": "@pipeline().parameters.data_output_path",
+															"type": "Expression"
+														},
+														"file": {
+															"value": "@item().output_file",
+															"type": "Expression"
+														},
+														"container": {
+															"value": "@pipeline().parameters.tgt_container",
+															"type": "Expression"
+														}
+													}
+												}
+											},
+											"compute": {
+												"coreCount": 8,
+												"computeType": "General"
+											},
+											"traceLevel": "Fine"
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If XLSX Files Exist",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Get XLSX File Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Get XLSX File Names').output.exists",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set xlsx_file_list",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "xlsx_file_list",
+								"value": {
+									"value": "@activity('Get XLSX File Names').output.childItems",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get Table List",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Move Data From File Drop",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Fetch_Source_Table_Configs",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"table": {
+							"value": "@pipeline().parameters.config_table",
+							"type": "Expression"
+						},
+						"database": {
+							"value": "@pipeline().parameters.config_database",
+							"type": "Expression"
+						},
+						"table_schema": {
+							"value": "@pipeline().parameters.config_table_schema",
+							"type": "Expression"
+						},
+						"addl_tbl_filter": {
+							"value": "LoadGroup = '@{pipeline().parameters.table_load_group}'\n@{if(equals(pipeline().parameters.source_key,'NONE'),'',\nconcat(' AND SourceKey = ',pipeline().parameters.source_key)\n)}\n",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "For Each XLSX File",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "For Each XLSX Mapping",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('xlsx_file_list')",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Filter For Mapping",
+							"type": "Filter",
+							"dependsOn": [
+								{
+									"activity": "Set current_file_name",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"items": {
+									"value": "@variables('xlsx_to_csv_mapping')",
+									"type": "Expression"
+								},
+								"condition": {
+									"value": "@equals(variables('current_file_name'),item().input_file)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Set current_file_name",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "current_file_name",
+								"value": {
+									"value": "@item().name",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "If File Is mapped",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Filter For Mapping",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@greater(activity('Filter For Mapping').output.FilteredItemsCount, 0)",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Append files_unmapped",
+										"type": "AppendVariable",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "files_unmapped",
+											"value": {
+												"value": "@variables('current_file_name')",
+												"type": "Expression"
+											}
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Append files_mapped",
+										"type": "AppendVariable",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "files_mapped",
+											"value": {
+												"value": "@variables('current_file_name')",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Set pipeline return values",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "For Each XLSX File",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "files_mapped",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('files_mapped')"
+							}
+						},
+						{
+							"key": "files_unmapped",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('files_unmapped')"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			}
+		],
+		"parameters": {
+			"src_container": {
+				"type": "string"
+			},
+			"src_container_folder": {
+				"type": "string",
+				"defaultValue": "filedrops"
+			},
+			"tgt_container": {
+				"type": "string"
+			},
+			"excel_output_path": {
+				"type": "string"
+			},
+			"data_output_path": {
+				"type": "string"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"source_key": {
+				"type": "string",
+				"defaultValue": "NONE"
+			},
+			"config_table": {
+				"type": "string"
+			},
+			"config_database": {
+				"type": "string"
+			},
+			"table_load_group": {
+				"type": "string"
+			},
+			"config_table_schema": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"xlsx_to_csv_mapping": {
+				"type": "Array"
+			},
+			"curr_mapping_pattern": {
+				"type": "String"
+			},
+			"curr_mapping_json_str": {
+				"type": "String"
+			},
+			"xlsx_file_list": {
+				"type": "Array"
+			},
+			"current_file_name": {
+				"type": "String"
+			},
+			"files_mapped": {
+				"type": "Array"
+			},
+			"files_unmapped": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "Shared_File_Drop_Pipelines"
+		},
+		"annotations": []
+	}
+}

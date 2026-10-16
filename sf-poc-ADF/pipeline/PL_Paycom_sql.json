@@ -1,0 +1,1152 @@
+{
+	"name": "PL_Paycom_sql",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute PL_AzureBlob_Data_Fetch_XLSX_To_CSV",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set config_container_folder",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_AzureBlob_Data_Fetch_XLSX_To_CSV",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"src_container": {
+							"value": "@variables('src_container')",
+							"type": "Expression"
+						},
+						"src_container_folder": {
+							"value": "@variables('src_filedrop_folder')",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"excel_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.excel_output_path",
+							"type": "Expression"
+						},
+						"data_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"config_table": {
+							"value": "@variables('config_table')",
+							"type": "Expression"
+						},
+						"config_database": {
+							"value": "@variables('config_database')",
+							"type": "Expression"
+						},
+						"table_load_group": {
+							"value": "@variables('table_load_group')",
+							"type": "Expression"
+						},
+						"config_table_schema": {
+							"value": "@variables('config_table_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set config_container_folder",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "config_container_folder",
+					"value": {
+						"value": "@pipeline().Pipeline",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Check If Payroll Report Exists",
+				"description": "Check to see if payroll_report_raw.csv was created at data_output_path",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "If Folder exists then only copy the data",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+								"type": "Expression"
+							},
+							"file": "payroll_report_raw.csv",
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"exists"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "If Payroll Report Exists",
+				"description": "If payroll_report_raw.csv exists, add the stored procedure call for processing the report",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Check If Payroll Report Exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Check If Payroll Report Exists').output.exists",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Append Payroll SP Call 1",
+							"description": "",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "sp_to_execute",
+								"value": {
+									"value": "@json('{\n    \"sp_db\": \"PaycomStaging\",\n    \"sp_schema\": \"dbo\",\n    \"sp_name\": \"sp_PayrollReportCleanupColumnNames\",\n    \"dataset\": \"Payroll Report Data\",\n    \"step\": \"Refactoring Column Names And Mapping Them To Database Table Column Names\"\n}')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Append Payroll SP Call 2",
+							"description": "",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "Append Payroll SP Call 1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "sp_to_execute",
+								"value": {
+									"value": "@json('{\n    \"sp_db\": \"PaycomStaging\",\n    \"sp_schema\": \"dbo\",\n    \"sp_name\": \"sp_PayrollReportCalcBaseMetrics\",\n    \"dataset\": \"Payroll Report Data\",\n    \"step\": \"Aggregating Values from Multiple Source Columns to Mapped Columns\"\n}')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Append Payroll SP Call 3",
+							"description": "",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "Append Payroll SP Call 2",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "sp_to_execute",
+								"value": {
+									"value": "@json('{\n    \"sp_db\": \"PaycomReplicated\",\n    \"sp_schema\": \"dbo\",\n    \"sp_name\": \"LOAD_PAYROLL_REPORT_DATA\",\n    \"dataset\": \"Payroll Report Data\",\n    \"step\": \"Loading The Aggregated Payroll Metrics To Replication Database For Reporting\"\n}')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "For Each Stored Procedure To Execute",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Append Dimension SP",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('sp_to_execute')",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "If SP Has Not Failed",
+							"description": "Only execute stored procedure if there are no prior failures",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "[@{item().sp_db}].[@{item().sp_schema}].[@{item().sp_name}]"
+								}
+							],
+							"typeProperties": {
+								"expression": {
+									"value": "@not(variables('sp_has_failed'))",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Append Data Processing Skipped",
+										"type": "AppendVariable",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "data_process_step_skipped",
+											"value": {
+												"value": "@concat(\n        '<span style=font-weight:bold>Dataset</span>: ',item().dataset,'<br/><span style=font-weight:bold>- Step</span>: ',item().step\n    )\n",
+												"type": "Expression"
+											}
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Execute PL_Execute_Single_Stored_Procedure1",
+										"type": "Wait",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"waitTimeInSeconds": 1
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Set sp_has_failed True",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "If SP Has Not Failed",
+									"dependencyConditions": [
+										"Failed",
+										"Skipped"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "[@{item().sp_db}].[@{item().sp_schema}].[@{item().sp_name}]"
+								}
+							],
+							"typeProperties": {
+								"variableName": "sp_has_failed",
+								"value": {
+									"value": "@bool(1)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Append Data Process Failed sp",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "Set sp_has_failed True",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "data_process_step_failed",
+								"value": {
+									"value": "@concat(\n       '<span style=font-weight:bold>Dataset</span>: ',item().dataset,'<br/><span style=font-weight:bold> - Step</span>: ',item().step,'<br/><span style=font-weight:bold> - Error</span>: <span style=color:red;font-weight:bold>Execute PL_Execute_Single_Stored_Procedure - Errormessage Operation on target Execute Stored Procedure failed:</span>'\n    )",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "If Sp Succeeded Then Append Dataset",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "If SP Has Not Failed",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@and(not(variables('sp_has_failed')),contains(item().sp_name,'LOAD'))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Append Data Process Success sp",
+										"type": "AppendVariable",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "data_process_step_succeeded",
+											"value": {
+												"value": "@concat(\n        '<span style=font-weight:bold>Dataset</span>: ',item().dataset,'<br/><span style=font-weight:bold> - Step</span>: ',item().step\n    )\n",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Check If Budget Report Exists",
+				"description": "Check to see if budget_report_raw.csv was created at data_output_path",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "If Folder exists then only copy the data",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+								"type": "Expression"
+							},
+							"file": "budget_report_raw.csv",
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"exists"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "If Budget Report Exists",
+				"description": "If budget_report_raw.csv exists, add the stored procedure call for processing the report",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Check If Budget Report Exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Check If Budget Report Exists').output.exists",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Append Budget SP Call 1",
+							"description": "",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "sp_to_execute",
+								"value": {
+									"value": "@json('{\n    \"sp_db\": \"PaycomStaging\",\n    \"sp_schema\": \"dbo\",\n    \"sp_name\": \"sp_BudgetReportPivot\",\n    \"dataset\": \"Budget Report\",\n    \"step\": \"Pivoting The Budget Report Data To Calculate The Expense\"\n}')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Append Budget SP Call 2",
+							"description": "",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "Append Budget SP Call 1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "sp_to_execute",
+								"value": {
+									"value": "@json('{\n    \"sp_db\": \"PaycomReplicated\",\n    \"sp_schema\": \"dbo\",\n    \"sp_name\": \"LOAD_BUDGET_REPORT_DATA\",\n    \"dataset\": \"Budget Report\",\n    \"step\": \"Loading Budget Report Data From Staging Database To Replication Database For Reporting\"\n}')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Check If Bonus Budget Report Exists",
+				"description": "Check to see if bonus_budget_report_raw.csv was created at data_output_path",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "If Folder exists then only copy the data",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+								"type": "Expression"
+							},
+							"file": "bonus_budget_report_raw.csv",
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"exists"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "If Bonus Budget Report Exists",
+				"description": "If bonus_budget_report_raw.csv exists, add the stored procedure call for processing the report",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Check If Bonus Budget Report Exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Check If Bonus Budget Report Exists').output.exists",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Append Bonus Budget SP Call 1",
+							"description": "",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "sp_to_execute",
+								"value": {
+									"value": "@json('{\n    \"sp_db\": \"PaycomStaging\",\n    \"sp_schema\": \"dbo\",\n    \"sp_name\": \"sp_BonusBudgetReportPivot\",\n    \"dataset\": \"Bonus Budget Report\",\n    \"step\": \"Pivoting The Bonus Budget Report Data To Calculate The Expense\"\n}')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Append Bonus Budget SP Call 2",
+							"description": "",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "Append Bonus Budget SP Call 1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "sp_to_execute",
+								"value": {
+									"value": "@json('{\n    \"sp_db\": \"PaycomReplicated\",\n    \"sp_schema\": \"dbo\",\n    \"sp_name\": \"LOAD_BONUS_BUDGET_REPORT_DATA\",\n    \"dataset\": \"Bonus Budget Report\",\n    \"step\": \"Loading Bonus Budget Report Data From Staging Database To Replication Database For Reporting\"\n}')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Append Dimension SP",
+				"description": "If condition will always be true (this is just used for grouping the dimension stored procedures)",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "If Payroll Report Exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "If Budget Report Exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "If Bonus Budget Report Exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "If Department Mapped File Exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "If Location Mapped File Exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(empty(activity('Execute PL_AzureBlob_Data_Fetch_XLSX_To_CSV').output.pipelineReturnValue.files_mapped))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Append Dim SP Call 1",
+							"description": "[dbo].[sp_BudgetReportPivot]",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "sp_to_execute",
+								"value": {
+									"value": "@json('{\n    \"sp_db\": \"PaycomReplicated\",\n    \"sp_schema\": \"dbo\",\n    \"sp_name\": \"LOAD_DIM_TABLE_DATA\",\n    \"dataset\": \"N/A\",\n    \"step\": \"Loading Data To Dimension Tables From All Tables\"\n}')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get Folder exists",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_AzureBlob_Data_Fetch_XLSX_To_CSV",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"exists"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "If Folder exists then only copy the data",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Get Folder exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Get Folder exists').output.exists",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Execute PL_Load_Data_AzureBlob_CSV_To_SQL",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_Load_Data_AzureBlob_CSV_To_SQL",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"container": {
+										"value": "@variables('tgt_container')",
+										"type": "Expression"
+									},
+									"data_output_path": {
+										"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+										"type": "Expression"
+									},
+									"metadata_output_path": {
+										"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.metadata_output_path",
+										"type": "Expression"
+									},
+									"database_name": {
+										"value": "@variables('tgt_db')",
+										"type": "Expression"
+									},
+									"schema_name": {
+										"value": "@variables('tgt_schema')",
+										"type": "Expression"
+									},
+									"write_mode": "drop",
+									"main_pipeline_run_id": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									},
+									"main_pipeline_name": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If any files received send mail",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "For Each Stored Procedure To Execute",
+						"dependencyConditions": [
+							"Succeeded",
+							"Skipped",
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(not(empty(activity('Execute PL_AzureBlob_Data_Fetch_XLSX_To_CSV').output.pipelineReturnValue.files_mapped)), not(empty(activity('Execute PL_AzureBlob_Data_Fetch_XLSX_To_CSV').output.pipelineReturnValue.files_unmapped)))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Execute Send Pipeline Status Mail",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_Paycom_Status_Mail",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"files_skipped": {
+										"value": "@activity('Execute PL_AzureBlob_Data_Fetch_XLSX_To_CSV').output.pipelineReturnValue.files_unmapped",
+										"type": "Expression"
+									},
+									"files_loaded": {
+										"value": "@activity('Execute PL_AzureBlob_Data_Fetch_XLSX_To_CSV').output.pipelineReturnValue.files_mapped",
+										"type": "Expression"
+									},
+									"files_data_process_succeeded": {
+										"value": "@variables('data_process_step_succeeded')",
+										"type": "Expression"
+									},
+									"files_data_process_failed": {
+										"value": "@variables('data_process_step_failed')",
+										"type": "Expression"
+									},
+									"files_data_process_skipped": {
+										"value": "@variables('data_process_step_skipped')",
+										"type": "Expression"
+									},
+									"to": {
+										"value": "@split(pipeline().globalParameters.ENV_MAIL_CONFIG_DEVELOPERS,',')",
+										"type": "Expression"
+									},
+									"from": {
+										"value": "@variables('from_mail_address')",
+										"type": "Expression"
+									},
+									"reply_to": {
+										"value": "@split(pipeline().globalParameters.ENV_MAIL_CONFIG_DEVELOPERS,',')",
+										"type": "Expression"
+									},
+									"cc": {
+										"value": "@createArray('sguber@spireortho.com','aaltman@spireortho.com')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Check If Department Mapped File Exists",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "If Folder exists then only copy the data",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+								"type": "Expression"
+							},
+							"file": {
+								"value": "department_mapped_raw.csv",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"exists"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "If Department Mapped File Exists",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Check If Department Mapped File Exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Check If Department Mapped File Exists').output.exists",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Append Department Mapped SP Call",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "sp_to_execute",
+								"value": {
+									"value": "@json(\n    '{\n        \"sp_db\":\"PaycomReplicated\",\n        \"sp_schema\":\"dbo\",\n        \"sp_name\":\"LOAD_DEPARTMENT_MAPPED_DATA\",\n        \"dataset\":\"Department Location Mapped\",\n        \"step\": \"Loading Department Mapped Data From Staging Database To Replication Database\"\n    }'\n)",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Check If Location Mapped File Exists",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "If Folder exists then only copy the data",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+								"type": "Expression"
+							},
+							"file": {
+								"value": "location_mapped_raw.csv",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"exists"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "If Location Mapped File Exists",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Check If Location Mapped File Exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Check If Location Mapped File Exists').output.exists",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Append Location Mapped SP Call",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "sp_to_execute",
+								"value": {
+									"value": "@json(\n    '{\n        \"sp_db\":\"PaycomReplicated\",\n        \"sp_schema\":\"dbo\",\n        \"sp_name\":\"LOAD_LOCATION_MAPPED_DATA\",\n        \"dataset\":\"Department Location Mapped\",\n        \"step\": \"Loading Location Mapped Data From Staging Database To Replication Database\"\n    }'\n)",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"policy": {
+			"elapsedTimeMetric": {
+				"duration": "00.00:20:00"
+			}
+		},
+		"variables": {
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "paycom"
+			},
+			"tgt_db": {
+				"type": "String",
+				"defaultValue": "PaycomStaging"
+			},
+			"tgt_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"src_container": {
+				"type": "String",
+				"defaultValue": "paycom"
+			},
+			"src_filedrop_folder": {
+				"type": "String",
+				"defaultValue": "filedrops"
+			},
+			"config_container": {
+				"type": "String",
+				"defaultValue": "utility"
+			},
+			"config_container_folder": {
+				"type": "String",
+				"defaultValue": "PL_Paycom"
+			},
+			"config_filename": {
+				"type": "String",
+				"defaultValue": "xlsx_file_mapping.json"
+			},
+			"copied_file_names": {
+				"type": "Array"
+			},
+			"sp_to_execute": {
+				"type": "Array"
+			},
+			"sp_has_failed": {
+				"type": "Boolean",
+				"defaultValue": false
+			},
+			"config_table": {
+				"type": "String",
+				"defaultValue": "adf_xlsx_source_table_configs"
+			},
+			"config_database": {
+				"type": "String",
+				"defaultValue": "PaycomStaging"
+			},
+			"config_table_schema": {
+				"type": "String",
+				"defaultValue": "adf"
+			},
+			"table_load_group": {
+				"type": "String",
+				"defaultValue": "Priority"
+			},
+			"files_skipped": {
+				"type": "Array"
+			},
+			"files_loaded": {
+				"type": "Array"
+			},
+			"data_process_step_succeeded": {
+				"type": "Array"
+			},
+			"data_process_step_failed": {
+				"type": "Array"
+			},
+			"data_process_step_skipped": {
+				"type": "Array"
+			},
+			"from_mail_address": {
+				"type": "String",
+				"defaultValue": "spiredata@spireortho.com"
+			}
+		},
+		"folder": {
+			"name": "Job_Paycom"
+		},
+		"annotations": []
+	}
+}

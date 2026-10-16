@@ -1,0 +1,523 @@
+{
+	"name": "PL_Modmed_CDF",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set File Time Stamp",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "file_time_stamp",
+					"value": {
+						"value": "@formatDateTime(utcNow(),'yyyyMMddHHmm')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Refresh Time Command",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set File Time Stamp",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "command",
+					"value": {
+						"value": "/bin/bash -c \" \\\nln -s /datadisk $(pwd)/datadisk && \\\nbash run.sh \\\n    --keyvault_base_url=@{pipeline().globalParameters.ENV_KV_BASE_URL} \\\n    --blob_url=@{pipeline().globalParameters.ENV_AZURE_BLOB_ACCOUNT_URL}/ \\\n    --blob_container=@{variables('tgt_container')} \\\n    --blob_output_path=@{variables('blob_output_path')} \\\n    --file_time_stamp='@{variables('file_time_stamp')}' \\\n    --namespace=@{pipeline().parameters.namespace} \\\n    --tables=_refresh_time\"",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Pull Refresh Time On Batch",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set Refresh Time Command",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Batch_Execute_Scripts",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"python_script_path": {
+							"value": "@variables('python_script_path')",
+							"type": "Expression"
+						},
+						"command": {
+							"value": "@variables('command')",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Stage Refresh Time",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Pull Refresh Time On Batch",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_Snowflake_Spire",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"warehouse": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+						"database": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+						"user_name": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+						"role": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+						"account_name": "spireortho-aaas.privatelink"
+					}
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "@concat('TRUNCATE TABLE ', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.\"_refresh_time\"')",
+								"type": "Expression"
+							}
+						},
+						{
+							"type": "Query",
+							"text": {
+								"value": "@concat('COPY INTO ', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.\"_refresh_time\" FROM @', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.', variables('sf_stage'), '/', variables('file_time_stamp'), '/_refresh_time.parquet FILE_FORMAT = (FORMAT_NAME = ''', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.', variables('sf_file_format'), ''') MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE ON_ERROR = ABORT_STATEMENT')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Compute Delta",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Stage Refresh Time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_Snowflake_Spire",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"warehouse": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+						"database": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+						"user_name": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+						"role": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+						"account_name": "spireortho-aaas.privatelink"
+					}
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "@concat('SELECT LISTAGG(src.\"table_name\", '','') AS TABLES FROM ', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.\"_refresh_time\" src LEFT JOIN ', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.\"_ingest_watermark\" w ON w.\"table_name\" = src.\"table_name\" WHERE src.\"table_name\" NOT IN (''_info'',''_refresh_time'') AND src.\"refresh_time\" > COALESCE(w.\"loaded_refresh_time\", ''1900-01-01''::timestamp_tz)', if(equals(pipeline().parameters.load_mode, 'priority'), ' AND src.\"priority\" = TRUE', ''), if(equals(coalesce(pipeline().parameters.exclude_tables, ''), ''), '', concat(' AND src.\"table_name\" NOT IN (''', replace(coalesce(pipeline().parameters.exclude_tables, ''), ',', ''','''), ''')')))",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Set Changed Tables",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Compute Delta",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "changed_tables",
+					"value": {
+						"value": "@coalesce(activity('Compute Delta').output.resultSets[0].rows[0]['TABLES'], '')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "If Has Changes",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Set Changed Tables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(length(variables('changed_tables')), 0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set Command",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "command",
+								"value": {
+									"value": "/bin/bash -c \" \\\nln -s /datadisk $(pwd)/datadisk && \\\nbash run.sh \\\n    --keyvault_base_url=@{pipeline().globalParameters.ENV_KV_BASE_URL} \\\n    --blob_url=@{pipeline().globalParameters.ENV_AZURE_BLOB_ACCOUNT_URL}/ \\\n    --blob_container=@{variables('tgt_container')} \\\n    --blob_output_path=@{variables('blob_output_path')} \\\n    --file_time_stamp='@{variables('file_time_stamp')}' \\\n    --namespace=@{pipeline().parameters.namespace} \\\n    --tables=@{variables('changed_tables')}\"",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Run Daily Ingest On Batch",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Set Command",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_Batch_Execute_Scripts",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"python_script_path": {
+										"value": "@variables('python_script_path')",
+										"type": "Expression"
+									},
+									"command": {
+										"value": "@variables('command')",
+										"type": "Expression"
+									},
+									"main_pipeline_name": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"main_pipeline_run_id": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Copy Tables To Snowflake",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "If Has Changes",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@if(equals(variables('changed_tables'), ''), json('[]'), split(variables('changed_tables'), ','))",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 10,
+					"activities": [
+						{
+							"name": "Truncate Table",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.00:10:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_Spire",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"warehouse": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+									"database": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+									"user_name": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+									"role": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+									"account_name": "spireortho-aaas.privatelink"
+								}
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat('TRUNCATE TABLE ', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.', item())",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Copy Into Snowflake",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Truncate Table",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_Spire",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"warehouse": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+									"database": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+									"user_name": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+									"role": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+									"account_name": "spireortho-aaas.privatelink"
+								}
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat('COPY INTO ', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.', item(), ' FROM @', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.', variables('sf_stage'), '/', variables('file_time_stamp'), '/', item(), '.parquet FILE_FORMAT = (FORMAT_NAME = ''', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.', variables('sf_file_format'), ''') MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE ON_ERROR = ABORT_STATEMENT')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "If Errors",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Copy Into Snowflake",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@or(or(contains(string(activity('Copy Into Snowflake').output.resultSets[0].rows), '\"status\":\"FAILED\"'), contains(string(activity('Copy Into Snowflake').output.resultSets[0].rows), '\"status\":\"LOAD_FAILED\"')), contains(string(activity('Copy Into Snowflake').output.resultSets[0].rows), '\"status\":\"PARTIALLY_LOADED\"'))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Fail On Load Errors",
+										"type": "Fail",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"message": {
+												"value": "@concat('Modmed CDF Snowflake load failed - target: ', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.', item(), ', file: ', string(activity('Copy Into Snowflake').output.resultSets[0].rows[0]['file']), ', status: ', string(activity('Copy Into Snowflake').output.resultSets[0].rows[0]['status']), ', rows_loaded: ', string(activity('Copy Into Snowflake').output.resultSets[0].rows[0]['rows_loaded']), ', errors_seen: ', string(activity('Copy Into Snowflake').output.resultSets[0].rows[0]['errors_seen']))",
+												"type": "Expression"
+											},
+											"errorCode": "SNOWFLAKE_LOAD_VALIDATION_FAILED"
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Update Watermark",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "If Errors",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.00:10:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_Spire",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"warehouse": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+									"database": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+									"user_name": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+									"role": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+									"account_name": "spireortho-aaas.privatelink"
+								}
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat('MERGE INTO ', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.\"_ingest_watermark\" w USING (SELECT ''', item(), ''' AS TABLE_NAME, (SELECT \"refresh_time\" FROM ', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.', variables('sf_schema'), '.\"_refresh_time\" WHERE \"table_name\" = ''', item(), ''') AS RT) s ON w.\"table_name\" = s.TABLE_NAME WHEN MATCHED THEN UPDATE SET \"loaded_refresh_time\" = s.RT, \"updated_at\" = CURRENT_TIMESTAMP() WHEN NOT MATCHED THEN INSERT (\"table_name\", \"loaded_refresh_time\", \"updated_at\") VALUES (s.TABLE_NAME, s.RT, CURRENT_TIMESTAMP())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						}
+					]
+				}
+			}
+		],
+		"concurrency": 1,
+		"policy": {
+			"elapsedTimeMetric": {
+				"duration": "0.02:00:00"
+			}
+		},
+		"parameters": {
+			"namespace": {
+				"type": "string",
+				"defaultValue": "onsmd"
+			},
+			"load_mode": {
+				"type": "string",
+				"defaultValue": "all"
+			},
+			"exclude_tables": {
+				"type": "string",
+				"defaultValue": ""
+			}
+		},
+		"variables": {
+			"python_script_path": {
+				"type": "String",
+				"defaultValue": "utility/PL_Modmed_CDF"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "modmed"
+			},
+			"blob_output_path": {
+				"type": "String",
+				"defaultValue": "PL_Modmed_CDF/raw"
+			},
+			"file_time_stamp": {
+				"type": "String"
+			},
+			"command": {
+				"type": "String"
+			},
+			"sf_schema": {
+				"type": "String",
+				"defaultValue": "MODMEDCDFSTAGING"
+			},
+			"sf_stage": {
+				"type": "String",
+				"defaultValue": "CDF"
+			},
+			"sf_file_format": {
+				"type": "String",
+				"defaultValue": "FF_MODMED_PARQUET"
+			},
+			"changed_tables": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_Modmed_CDF"
+		},
+		"annotations": []
+	}
+}

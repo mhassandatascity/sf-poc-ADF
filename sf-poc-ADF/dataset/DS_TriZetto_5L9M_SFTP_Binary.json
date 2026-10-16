@@ -1,0 +1,37 @@
+{
+	"name": "DS_TriZetto_5L9M_SFTP_Binary",
+	"properties": {
+		"description": "SFTP binary dataset for copying single files from the TriZetto 5L9M mailbox",
+		"linkedServiceName": {
+			"referenceName": "LS_TriZetto_5L9M_SFTP",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"remote_directory": {
+				"type": "string"
+			},
+			"filename": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "TriZetto"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "SftpLocation",
+				"fileName": {
+					"value": "@dataset().filename",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().remote_directory",
+					"type": "Expression"
+				}
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

@@ -1,0 +1,35 @@
+{
+	"name": "DS_AzureBlob_Spire_DummyFile",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SpireDF_Blob_SAS",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"auth_sas_url_sec": "@dataset().auth_sas_url_sec"
+			}
+		},
+		"parameters": {
+			"auth_sas_url_sec": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Shared"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": "dummy.csv",
+				"folderPath": "dummy",
+				"container": "utility"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": false,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}

@@ -1,0 +1,187 @@
+{
+	"name": "PL_Create_HTML_Table",
+	"properties": {
+		"activities": [
+			{
+				"name": "Create Header Row",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "html_table",
+					"value": {
+						"value": "@concat('<tr><th style=border-width:1px;border-style:solid;border-color:black;border-collapse:collapse;text-align:center;width:200px;height:30px;>',join(pipeline().parameters.columns,'</th><th style=border-width:1px;border-style:solid;border-color:black;border-collapse:collapse;text-align:center;width:200px;height:30px;>'),'</th></tr>')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Create Table Row",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Create Header Row",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.rows",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Execute PL_Create_Table_Rows",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_Create_Table_Rows",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"columns": {
+										"value": "@pipeline().parameters.columns",
+										"type": "Expression"
+									},
+									"row": {
+										"value": "@item()",
+										"type": "Expression"
+									},
+									"main_pipeline_run_id": {
+										"value": "@pipeline().parameters.main_pipeline_run_id",
+										"type": "Expression"
+									},
+									"main_pipeline_name": {
+										"value": "@pipeline().parameters.main_pipeline_name",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Concat New Row",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Execute PL_Create_Table_Rows",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "table_concat",
+								"value": {
+									"value": "@concat(variables('html_table'),activity('Execute PL_Create_Table_Rows').output.pipelineReturnValue.row)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Set FInal Table",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Concat New Row",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "html_table",
+								"value": {
+									"value": "@variables('table_concat')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Set Pipeline Return Values",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Create Table Row",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "html_table",
+							"value": {
+								"type": "Expression",
+								"content": "@concat('<table>',variables('html_table'),'</table><br/>')"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			}
+		],
+		"parameters": {
+			"columns": {
+				"type": "array"
+			},
+			"rows": {
+				"type": "array"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"header": {
+				"type": "String"
+			},
+			"html_table": {
+				"type": "String"
+			},
+			"table_concat": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Shared_Alerting_Pipelines"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,54 @@
+{
+	"name": "DF_XLSX_To_CSV",
+	"properties": {
+		"folder": {
+			"name": "Shared_Dataflows"
+		},
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_XLSX",
+						"type": "DatasetReference"
+					},
+					"name": "ExcelSource"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference"
+					},
+					"name": "CSVSink"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectNonBlankColumns"
+				}
+			],
+			"scriptLines": [
+				"parameters{",
+				"     file_name as string",
+				"}",
+				"source(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false) ~> ExcelSource",
+				"ExcelSource select(mapColumn(",
+				"          each(match(not(startsWith(name,'_c'))))",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> SelectNonBlankColumns",
+				"SelectNonBlankColumns sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     partitionFileNames:[($file_name)],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     quoteAll: true,",
+				"     partitionBy('hash', 1)) ~> CSVSink"
+			]
+		}
+	}
+}

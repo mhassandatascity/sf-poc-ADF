@@ -1,0 +1,749 @@
+{
+	"name": "PL_Load_Metadata_To_AzureBlob_CSV_And_SQL",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Data File Names",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.src_data_path",
+								"type": "Expression"
+							},
+							"file": "*.csv",
+							"container": {
+								"value": "@pipeline().parameters.src_data_container",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "For Each CSV File Load Metadata",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get Data File Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Data File Names').output.childItems",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Get File Metadata",
+							"type": "GetMetadata",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().name}"
+								}
+							],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@pipeline().parameters.src_data_path",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.src_data_container",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"columnCount",
+									"structure"
+								],
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							}
+						},
+						{
+							"name": "Copy Column Count",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Get File Metadata",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().name}"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"additionalColumns": [
+										{
+											"name": "TableName",
+											"value": {
+												"value": "@replace(item().name,'.csv','')",
+												"type": "Expression"
+											}
+										},
+										{
+											"name": "ColumnCount",
+											"value": {
+												"value": "@activity('Get File Metadata').output.columnCount",
+												"type": "Expression"
+											}
+										},
+										{
+											"name": "DBName",
+											"value": {
+												"value": "@pipeline().parameters.tgt_db",
+												"type": "Expression"
+											}
+										},
+										{
+											"name": "TableSchema",
+											"value": {
+												"value": "@pipeline().parameters.tgt_tables_schema",
+												"type": "Expression"
+											}
+										},
+										{
+											"name": "BlobFilePath",
+											"value": {
+												"value": "@{pipeline().parameters.src_data_container}/@{pipeline().parameters.src_data_path}/@{item().name}",
+												"type": "Expression"
+											}
+										}
+									],
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "DBName",
+												"type": "String"
+											},
+											"sink": {
+												"name": "DBName",
+												"physicalType": "String"
+											}
+										},
+										{
+											"source": {
+												"name": "TableSchema",
+												"type": "String"
+											},
+											"sink": {
+												"name": "TableSchema",
+												"physicalType": "String"
+											}
+										},
+										{
+											"source": {
+												"name": "TableName",
+												"type": "String"
+											},
+											"sink": {
+												"name": "TableName",
+												"physicalType": "String"
+											}
+										},
+										{
+											"source": {
+												"name": "BlobFilePath",
+												"type": "String"
+											},
+											"sink": {
+												"name": "BlobFilePath",
+												"physicalType": "String"
+											}
+										},
+										{
+											"source": {
+												"name": "ColumnCount",
+												"type": "String"
+											},
+											"sink": {
+												"name": "ColumnCount",
+												"physicalType": "String"
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_DummyFile",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.tgt_metadata_path}/TableColumnCounts",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_metadata_container",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Copy Column Schema",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Get File Metadata",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().name}"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "JsonSource",
+									"additionalColumns": [
+										{
+											"name": "data",
+											"value": {
+												"value": "@string(activity('Get File Metadata').output.structure)",
+												"type": "Expression"
+											}
+										}
+									],
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "JsonReadSettings"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"path": "$['data']"
+											},
+											"sink": {
+												"type": "String",
+												"ordinal": 1
+											}
+										}
+									]
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_JSON",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": "utility",
+										"path": "dummy",
+										"file": "dummy.json"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV_No_Quotes",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_metadata_container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.tgt_metadata_path}/TableColumnSchema",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@replace(item().name,'.csv','.json')",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Get Schema Structure File Names",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "For Each CSV File Load Metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_JSON",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.tgt_metadata_container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@{pipeline().parameters.tgt_metadata_path}/TableColumnSchema",
+								"type": "Expression"
+							},
+							"file": "*.json"
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "JsonReadSettings"
+					}
+				}
+			},
+			{
+				"name": "For Each Schema JSON Convert to CSV",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get Schema Structure File Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Schema Structure File Names').output.childItems",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Copy Column Schema From JSON to CSV",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().name}"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "JsonSource",
+									"additionalColumns": [
+										{
+											"name": "TableName",
+											"value": {
+												"value": "@replace(item().name,'.json','')",
+												"type": "Expression"
+											}
+										},
+										{
+											"name": "DBName",
+											"value": {
+												"value": "@pipeline().parameters.tgt_db",
+												"type": "Expression"
+											}
+										},
+										{
+											"name": "TableSchema",
+											"value": {
+												"value": "@pipeline().parameters.tgt_tables_schema",
+												"type": "Expression"
+											}
+										},
+										{
+											"name": "BlobFilePath",
+											"value": {
+												"value": "@{pipeline().parameters.src_data_container}/@{pipeline().parameters.src_data_path}/@{replace(item().name,'.json','.csv')}",
+												"type": "Expression"
+											}
+										}
+									],
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "JsonReadSettings"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"path": "$['DBName']"
+											},
+											"sink": {
+												"name": "DBName",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "$['TableSchema']"
+											},
+											"sink": {
+												"name": "TableSchema",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "$['TableName']"
+											},
+											"sink": {
+												"name": "TableName",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "$['BlobFilePath']"
+											},
+											"sink": {
+												"name": "BlobFilePath",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "$['name']"
+											},
+											"sink": {
+												"name": "ColumnName",
+												"type": "String"
+											}
+										}
+									]
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_JSON",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_metadata_container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.tgt_metadata_path}/TableColumnSchema",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.tgt_metadata_path}/TableColumnSchema",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@replace(item().name,'.json','.csv')",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_metadata_container",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Execute PL_Combine_And_Update_Metadata",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "For Each Schema JSON Convert to CSV",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Combine_And_Update_Metadata",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"tgt_container": {
+							"value": "@pipeline().parameters.src_data_container",
+							"type": "Expression"
+						},
+						"tgt_metadata_output_path": {
+							"value": "@pipeline().parameters.tgt_metadata_path",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@pipeline().parameters.tgt_db",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@pipeline().parameters.tgt_tables_schema",
+							"type": "Expression"
+						},
+						"tgt_metadata_schema": {
+							"value": "@pipeline().parameters.tgt_metadata_schema",
+							"type": "Expression"
+						},
+						"row_count_tables": {
+							"value": "@createArray('TableColumnCounts','TableColumnSchema')",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"src_data_container": {
+				"type": "string"
+			},
+			"src_data_path": {
+				"type": "string"
+			},
+			"tgt_metadata_container": {
+				"type": "string"
+			},
+			"tgt_metadata_path": {
+				"type": "string"
+			},
+			"tgt_db": {
+				"type": "string"
+			},
+			"tgt_tables_schema": {
+				"type": "string"
+			},
+			"tgt_metadata_schema": {
+				"type": "string",
+				"defaultValue": "metadata"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Shared_Pipelines"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,36 @@
+{
+	"name": "TR_ORI_CentricityPS_Monthly_1st_05_00_PM",
+	"properties": {
+		"description": "1st of each month",
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_ORI_centricityps",
+					"type": "PipelineReference"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Month",
+				"interval": 1,
+				"startTime": "2024-10-17T10:00:00",
+				"timeZone": "Eastern Standard Time",
+				"schedule": {
+					"minutes": [
+						0
+					],
+					"hours": [
+						17
+					],
+					"monthDays": [
+						1
+					]
+				}
+			}
+		}
+	}
+}

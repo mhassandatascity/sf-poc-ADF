@@ -1,0 +1,85 @@
+{
+	"name": "TR_Modmed_Everyday_Priority_05_00_AM",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_ModmedFileCheck",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"table_load_group": "Priority",
+					"pbiDatasetInputs": [
+						{
+							"dev": [],
+							"prod": [
+								{
+									"pbiDatasetName": "Enterprise",
+									"pbiWorkspaceId": "862e15ed-d1ad-4d83-bbbb-047c2a9b73e6",
+									"pbiDatasetId": "477dc75e-8ffa-4020-bf58-757b869f4380",
+									"pollingIntervalInSeconds": 60
+								},
+								{
+									"pbiDatasetName": "Enterprise Patient History Search",
+									"pbiWorkspaceId": "862e15ed-d1ad-4d83-bbbb-047c2a9b73e6",
+									"pbiDatasetId": "e89a3738-7db6-4e79-8e1a-02a8e752086b",
+									"pollingIntervalInSeconds": 60
+								},
+								{
+									"pbiDatasetName": "Fee Schedule",
+									"pbiWorkspaceId": "35a1e708-bdc1-433d-ad24-489be6e5e88c",
+									"pbiDatasetId": "16f92830-337b-40b9-a935-12599b95e111",
+									"pollingIntervalInSeconds": 60
+								},
+								{
+									"pbiDatasetName": "Last Modified Date",
+									"pbiWorkspaceId": "862e15ed-d1ad-4d83-bbbb-047c2a9b73e6",
+									"pbiDatasetId": "8363a7f4-d234-4279-a5f4-de784c7f3a3a",
+									"pollingIntervalInSeconds": 60
+								},
+								{
+									"pbiDatasetName": "Modmed",
+									"pbiWorkspaceId": "35a1e708-bdc1-433d-ad24-489be6e5e88c",
+									"pbiDatasetId": "381f9971-64ee-483d-9f98-2a3dc98ff1cd",
+									"pollingIntervalInSeconds": 60
+								},
+								{
+									"pbiDatasetName": "Modmed Clinical Operations",
+									"pbiWorkspaceId": "5b475831-6409-4fd5-b386-52acac0c4f6b",
+									"pbiDatasetId": "ef45468e-ee00-4a38-b3b1-7a4b2c7711a4",
+									"pollingIntervalInSeconds": 60
+								},
+								{
+									"pbiDatasetName": "SQL Table Maintenance",
+									"pbiWorkspaceId": "862e15ed-d1ad-4d83-bbbb-047c2a9b73e6",
+									"pbiDatasetId": "11bb3dcb-8c0e-463d-8c8c-2be991856b05",
+									"pollingIntervalInSeconds": 60
+								}
+							]
+						}
+					],
+					"maxRetry": 5
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Day",
+				"interval": 1,
+				"startTime": "2023-12-24T15:00:00",
+				"timeZone": "Eastern Standard Time",
+				"schedule": {
+					"minutes": [
+						0
+					],
+					"hours": [
+						5
+					]
+				}
+			}
+		}
+	}
+}

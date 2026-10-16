@@ -1,0 +1,41 @@
+{
+	"name": "DS_Paycom_SFTP_copy",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Paycom_SFTP",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"filename": {
+				"type": "string"
+			},
+			"remote_directory": {
+				"type": "string",
+				"defaultValue": "Outbound"
+			}
+		},
+		"folder": {
+			"name": "Paycom"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "SftpLocation",
+				"fileName": {
+					"value": "@dataset().filename",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().remote_directory",
+					"type": "Expression"
+				}
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}

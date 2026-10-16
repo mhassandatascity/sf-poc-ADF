@@ -1,0 +1,248 @@
+{
+	"name": "PL_CTNB",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute PL_AzureBlob_Data_Fetch_XLSX_To_CSV",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_AzureBlob_Data_Fetch_XLSX_To_CSV",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"src_container": {
+							"value": "@variables('src_container')",
+							"type": "Expression"
+						},
+						"src_container_folder": {
+							"value": "@variables('src_filedrop_folder')",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"excel_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.excel_output_path",
+							"type": "Expression"
+						},
+						"data_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"source_key": {
+							"value": "@variables('source_key')",
+							"type": "Expression"
+						},
+						"config_table": {
+							"value": "@variables('config_table')",
+							"type": "Expression"
+						},
+						"config_database": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_META')",
+							"type": "Expression"
+						},
+						"table_load_group": {
+							"value": "@pipeline().parameters.table_load_group",
+							"type": "Expression"
+						},
+						"config_table_schema": {
+							"value": "@variables('config_table_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "PL_DBT_LOG_FILE_FOLDER_SF",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_LOG_FILE_FOLDER_SF",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"FolderDate": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "DBT Ingest CTNB",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_AzureBlob_Data_Fetch_XLSX_To_CSV",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/CTNBStaging"
+					}
+				}
+			},
+			{
+				"name": "DBT Test CTNB",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Ingest CTNB",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/CTNBStaging",
+						"dbt_command": "test"
+					}
+				}
+			}
+		],
+		"policy": {
+			"elapsedTimeMetric": {
+				"duration": "00.00:20:00"
+			}
+		},
+		"parameters": {
+			"table_load_group": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "ctnb"
+			},
+			"tgt_db": {
+				"type": "String",
+				"defaultValue": "CTNBStaging"
+			},
+			"tgt_schema": {
+				"type": "String",
+				"defaultValue": "etl"
+			},
+			"src_container": {
+				"type": "String",
+				"defaultValue": "ctnb"
+			},
+			"src_filedrop_folder": {
+				"type": "String",
+				"defaultValue": "filedrops"
+			},
+			"config_database": {
+				"type": "String",
+				"defaultValue": "DEV_META"
+			},
+			"config_table": {
+				"type": "String",
+				"defaultValue": "adf_source_table_configs"
+			},
+			"config_table_schema": {
+				"type": "String",
+				"defaultValue": "etl_metadata"
+			},
+			"source_key": {
+				"type": "String",
+				"defaultValue": "5"
+			}
+		},
+		"folder": {
+			"name": "Job_CTNB"
+		},
+		"annotations": []
+	}
+}

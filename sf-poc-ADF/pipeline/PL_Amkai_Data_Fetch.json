@@ -1,0 +1,471 @@
+{
+	"name": "PL_Amkai_Data_Fetch",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute SQL Files",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get SAS URI Base Url",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get SAS URI SAS Token",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Table List').output.pipelineReturnValue.TableNames",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Check if it is not ID table",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Get the SQL Query",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(int(item().has_row_version), 1)",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Copy table id data From LS to Blob_copy1",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "table_name",
+												"value": "@{item().target_table_name}"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "SqlServerSource",
+												"sqlReaderQuery": {
+													"value": "DECLARE @Query VARCHAR(MAX);\n\n-- Get the raw SQL string from the ADF activity output\nSET @Query = @{activity('Get the SQL Query').output.Response};\n\n-- Just execute the query directly — no wrapping in OPENQUERY\nEXEC(@Query);\n\n",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_SQLServer_Amkai",
+												"type": "DatasetReference",
+												"parameters": {
+													"schema": "*",
+													"table": "*"
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.tgt_data_output_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@{item().target_table_name}.csv",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Copy table data From LS to Blob_copy1",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "Set variable1",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "table_name",
+												"value": "@{item().target_table_name}"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "SqlServerSource",
+												"sqlReaderQuery": {
+													"value": "DECLARE @Query VARCHAR(MAX);\n\n-- Get the raw SQL string from the ADF activity output\nSET @Query = @{activity('Get the SQL Query').output.Response};\n\n-- Just execute the query directly — no wrapping in OPENQUERY\nEXEC(@Query);\n",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_SQLServer_Amkai",
+												"type": "DatasetReference",
+												"parameters": {
+													"schema": "*",
+													"table": "*"
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.tgt_data_output_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@{item().target_table_name}.csv",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "Set variable1",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "SQL_script",
+											"value": {
+												"value": "@activity('Get the SQL Query').output.Response\n",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Get the SQL Query",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "var_debug_log",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": true
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().target_table_name}"
+								}
+							],
+							"typeProperties": {
+								"method": "GET",
+								"url": {
+									"value": "@{activity('Get SAS URI Base Url').output.value}/@{pipeline().parameters.config_container}/@{pipeline().parameters.config_file_folder}/@{pipeline().parameters.sql_file_folder}/@{item().sql_file_name}?@{activity('Get SAS URI SAS Token').output.value}",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "var_debug_log",
+							"description": "@concat('Table: ', string(item().target_table_name), ' | has_row_version: ', string(item().has_row_version), ' | TYPE: ', type(item().has_row_version))\n",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "var_debug_log",
+								"value": {
+									"value": "@concat('Table: ', string(item().target_table_name), ' | has_row_version: ', string(item().has_row_version))",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get SAS URI Base Url",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get Table List",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-spire-azureblob-base-url?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get SAS URI SAS Token",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get Table List",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-spire-azureblob-sas-token?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get Table List",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Fetch_Source_Table_Configs",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"table": {
+							"value": "@pipeline().parameters.config_table",
+							"type": "Expression"
+						},
+						"database": {
+							"value": "@pipeline().parameters.config_database",
+							"type": "Expression"
+						},
+						"table_schema": {
+							"value": "@pipeline().parameters.config_table_schema",
+							"type": "Expression"
+						},
+						"addl_tbl_filter": {
+							"value": "LoadGroup = '@{pipeline().parameters.table_load_group}'",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"config_file": {
+				"type": "string",
+				"defaultValue": "file_configs.json"
+			},
+			"config_file_folder": {
+				"type": "string"
+			},
+			"config_container": {
+				"type": "string"
+			},
+			"sql_file_folder": {
+				"type": "string"
+			},
+			"tgt_db": {
+				"type": "string"
+			},
+			"tgt_container": {
+				"type": "string"
+			},
+			"tgt_data_output_path": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"source_key": {
+				"type": "string"
+			},
+			"config_table": {
+				"type": "string"
+			},
+			"config_database": {
+				"type": "string"
+			},
+			"config_table_schema": {
+				"type": "string"
+			},
+			"table_load_group": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"last_updated_row": {
+				"type": "String"
+			},
+			"query": {
+				"type": "String"
+			},
+			"var_debug_log": {
+				"type": "String"
+			},
+			"SQL_script": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_Amkai"
+		},
+		"annotations": []
+	}
+}

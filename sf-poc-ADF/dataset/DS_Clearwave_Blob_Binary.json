@@ -1,0 +1,34 @@
+{
+	"name": "DS_Clearwave_Blob_Binary",
+	"properties": {
+		"description": "Azure Blob binary dataset for Clearwave destination",
+		"linkedServiceName": {
+			"referenceName": "LS_SpireDF_Blob_MSI",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"RootFolder": {
+				"type": "string"
+			},
+			"SubFolder": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Clearwave"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"folderPath": {
+					"value": "@concat('PL_Clearwave/raw/', dataset().RootFolder, '/', dataset().SubFolder)",
+					"type": "Expression"
+				},
+				"container": "clearwave"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

@@ -1,0 +1,33 @@
+{
+	"name": "DS_Clearwave_SFTP_Binary",
+	"properties": {
+		"description": "SFTP binary dataset for copying files from timestamped folders",
+		"linkedServiceName": {
+			"referenceName": "LS_Clearwave_SFTP",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"RootFolder": {
+				"type": "string"
+			},
+			"SubFolder": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Clearwave"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "SftpLocation",
+				"folderPath": {
+					"value": "@concat('/prod-ue1-shared-sftp-spire-s3-clearwave/', dataset().RootFolder, '/', dataset().SubFolder)",
+					"type": "Expression"
+				}
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

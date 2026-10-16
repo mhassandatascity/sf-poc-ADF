@@ -1,0 +1,73 @@
+{
+	"name": "DS_AzureBlob_Spire_SingleFile_XLSX",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SpireDF_Blob_SAS_AZIR",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"auth_sas_url_sec": "@dataset().auth_sas_url_sec"
+			}
+		},
+		"parameters": {
+			"auth_sas_url_sec": {
+				"type": "string"
+			},
+			"container": {
+				"type": "string"
+			},
+			"path": {
+				"type": "string"
+			},
+			"file": {
+				"type": "string"
+			},
+			"range_start": {
+				"type": "string",
+				"defaultValue": "A1"
+			},
+			"sheet_index": {
+				"type": "int",
+				"defaultValue": 0
+			},
+			"first_row_as_header": {
+				"type": "bool",
+				"defaultValue": true
+			}
+		},
+		"folder": {
+			"name": "Shared"
+		},
+		"annotations": [],
+		"type": "Excel",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@dataset().file",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().path",
+					"type": "Expression"
+				},
+				"container": {
+					"value": "@dataset().container",
+					"type": "Expression"
+				}
+			},
+			"sheetIndex": {
+				"value": "@dataset().sheet_index",
+				"type": "Expression"
+			},
+			"range": {
+				"value": "@dataset().range_start",
+				"type": "Expression"
+			},
+			"firstRowAsHeader": {
+				"value": "@dataset().first_row_as_header",
+				"type": "Expression"
+			}
+		},
+		"schema": []
+	}
+}

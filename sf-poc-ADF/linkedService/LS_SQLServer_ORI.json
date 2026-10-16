@@ -1,0 +1,34 @@
+{
+	"name": "LS_SQLServer_ORI",
+	"properties": {
+		"description": "ORI SQL Server",
+		"parameters": {
+			"database": {
+				"type": "string",
+				"defaultValue": "PIDM_ori"
+			}
+		},
+		"annotations": [],
+		"type": "SqlServer",
+		"typeProperties": {
+			"server": "10.1.111.210",
+			"database": "@{linkedService().database}",
+			"encrypt": "mandatory",
+			"trustServerCertificate": true,
+			"authenticationType": "SQL",
+			"userName": "spiredw",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "sec-ori-sqlserver-auth-password"
+			}
+		},
+		"connectVia": {
+			"referenceName": "SAE-SelfHosted-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

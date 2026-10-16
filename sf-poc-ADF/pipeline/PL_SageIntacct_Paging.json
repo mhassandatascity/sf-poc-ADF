@@ -1,0 +1,1221 @@
+{
+	"name": "PL_SageIntacct_Paging",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get XML Fields",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Get Control SenderId",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get Control Password",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [
+					{
+						"name": "item",
+						"value": "@pipeline().parameters.table_name"
+					}
+				],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_JSON",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.tgt_container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@{pipeline().parameters.metadata_output_path}/preload_metadata",
+								"type": "Expression"
+							},
+							"file": {
+								"value": "@{pipeline().parameters.table_name}.json",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			},
+			{
+				"name": "Get Control SenderId",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Set last_load_time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-sageintacct-control-senderid?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get Control Password",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Set last_load_time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-sageintacct-control-password?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "Fetch Data Until Last Record",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Set total source record count",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greaterOrEquals(variables('offset'),variables('total_source_records'))",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "If No Error Occured",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Check If read query to use",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@if(equals(pipeline().parameters.config_object.method_to_use,'query'),not(and(equals(activity('Get Metadata For Error Handling')?.output?.columnCount,1),contains(string(activity('Get Metadata For Error Handling')?.output?.structure),'<status>failure</status>'))),equals(1,1))",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Set offset to source row counts if file contains error",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "offset",
+											"value": {
+												"value": "@variables('total_source_records')",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "Fail the pipeline if any error occured",
+										"type": "Fail",
+										"dependsOn": [
+											{
+												"activity": "Set offset to source row counts if file contains error",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"message": {
+												"value": "@activity('Get Metadata For Error Handling').output.structure[0]['name']",
+												"type": "Expression"
+											},
+											"errorCode": "300"
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Set records_copied",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "records_copied",
+											"value": {
+												"value": "@if(equals(pipeline().parameters.config_object['method_to_use'],'query'),activity('Copy From API to CSV From Query').output.rowsCopied,activity('Copy Data From API to JSON From Read').output.rowsCopied)",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "Set temp_offset",
+										"type": "SetVariable",
+										"dependsOn": [
+											{
+												"activity": "Set records_copied",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "temp_offset",
+											"value": {
+												"value": "@add(variables('offset'),variables('records_copied'))",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "Set offset",
+										"type": "SetVariable",
+										"dependsOn": [
+											{
+												"activity": "Set temp_offset",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "offset",
+											"value": {
+												"value": "@variables('temp_offset')",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Check If read query to use",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(pipeline().parameters.config_object['method_to_use'],'query')",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Set offset to source row counts if read fails",
+										"type": "SetVariable",
+										"dependsOn": [
+											{
+												"activity": "Copy Data From API to JSON From Read",
+												"dependencyConditions": [
+													"Failed",
+													"Skipped"
+												]
+											}
+										],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "offset",
+											"value": {
+												"value": "@variables('total_source_records')",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "Copy Data From API to JSON From Read",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "Execute PL_Combine_Values_From_JSON",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@pipeline().parameters.config_object.table_name"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "JsonSource",
+												"storeSettings": {
+													"type": "HttpReadSettings",
+													"requestMethod": "POST",
+													"additionalHeaders": "Content-Type:application/xml",
+													"requestBody": {
+														"value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n    <control>\n        <senderid>@{activity('Get Control SenderId').output.value}</senderid>\n        <password>@{activity('Get Control Password').output.value}</password>\n        <controlid>@{div(sub(ticks(utcNow()), ticks('1970-01-01')),10000000)}</controlid>\n        <uniqueid>false</uniqueid>\n        <dtdversion>3.0</dtdversion>\n        <includewhitespace>false</includewhitespace>\n    </control>\n    <operation>\n        <authentication>\n        \t<sessionid>@{pipeline().parameters.session_id}</sessionid>\n        </authentication>\n        <content>\n            <function controlid=\"@{guid()}\">\n                <read>\n                    <object>@{pipeline().parameters.table_name}</object>\n                    <keys>@{activity('Execute PL_Combine_Values_From_JSON').output.pipelineReturnValue.values}</keys>\n                    <fields>*</fields>\n                    <returnFormat>json</returnFormat>\n                </read>\n            </function>\n        </content>\n    </operation>\n</request>",
+														"type": "Expression"
+													},
+													"requestTimeout": ""
+												},
+												"formatSettings": {
+													"type": "JsonReadSettings"
+												}
+											},
+											"sink": {
+												"type": "JsonSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "JsonWriteSettings"
+												}
+											},
+											"enableStaging": false
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_SageIntacct_JSON",
+												"type": "DatasetReference"
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_JSON",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@{pipeline().parameters.data_output_path}/@{pipeline().parameters.config_object.table_name}",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@concat(pipeline().parameters.config_object.table_name,variables('offset'),'.json')",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "Wait For Failing For Read",
+										"type": "Wait",
+										"dependsOn": [
+											{
+												"activity": "Copy Data From API to JSON From Read",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"waitTimeInSeconds": 1
+										}
+									},
+									{
+										"name": "Get Total Source Record Numbers",
+										"type": "WebActivity",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"method": "POST",
+											"headers": {
+												"Content-Type": "application/xml"
+											},
+											"url": "https://api.intacct.com/ia/xml/xmlgw.phtml/",
+											"body": {
+												"value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n    <control>\n        <senderid>@{activity('Get Control SenderId').output.value}</senderid>\n        <password>@{activity('Get Control Password').output.value}</password>\n        <controlid>@{div(sub(ticks(utcNow()), ticks('1970-01-01')),10000000)}</controlid>\n        <uniqueid>false</uniqueid>\n        <dtdversion>3.0</dtdversion>\n        <includewhitespace>false</includewhitespace>\n    </control>\n    <operation>\n        <authentication>\n        \t<sessionid>@{pipeline().parameters.session_id}</sessionid>\n        </authentication>\n        <content>\n            <function controlid=\"@{guid()}\">\n                <query>\n                    <select>\n                        <field>RECORDNO</field>\n                    </select>\n                    <object>@{pipeline().parameters.table_name}</object>\n                    @{variables('filter_condition')}\n                    <pagesize>@{variables('page_size')}</pagesize>\n                    <offset>\n                        @{variables('offset')}\n                    </offset>\n                    <orderby>\n                        <order>\n                            <field>RECORDNO</field>\n                            <ascending />\n                        </order>\n                    </orderby>\n                    <options>\n                    <returnformat>json</returnformat>\n                    </options>\n                </query>\n            </function>\n        </content>\n    </operation>\n</request>",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "Execute PL_Combine_Values_From_JSON",
+										"type": "ExecutePipeline",
+										"dependsOn": [
+											{
+												"activity": "Get Total Source Record Numbers",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "PL_Combine_Values_From_JSON",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"json_array": {
+													"value": "@json(activity('Get Total Source Record Numbers').output['Response'])",
+													"type": "Expression"
+												},
+												"column": "RECORDNO"
+											}
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Copy From API to CSV From Query",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "DelimitedTextSource",
+												"additionalColumns": [
+													{
+														"name": "LastLoad",
+														"value": {
+															"value": "@variables('last_load_time')",
+															"type": "Expression"
+														}
+													}
+												],
+												"storeSettings": {
+													"type": "HttpReadSettings",
+													"requestMethod": "POST",
+													"additionalHeaders": {
+														"value": "Content-Type:application/xml",
+														"type": "Expression"
+													},
+													"requestBody": {
+														"value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n    <control>\n        <senderid>@{activity('Get Control SenderId').output.value}</senderid>\n        <password>@{activity('Get Control Password').output.value}</password>\n        <controlid>@{div(sub(ticks(utcNow()), ticks('1970-01-01')),10000000)}</controlid>\n        <uniqueid>false</uniqueid>\n        <dtdversion>3.0</dtdversion>\n        <includewhitespace>false</includewhitespace>\n    </control>\n    <operation>\n        <authentication>\n        \t<sessionid>@{pipeline().parameters.session_id}</sessionid>\n        </authentication>\n        <content>\n            <function controlid=\"@{guid()}\">\n                <query>\n                    <select>\n                        @{activity('Get XML Fields').output.firstRow['xml_columns']}\n                    </select>\n                    <object>@{pipeline().parameters.table_name}</object>\n                    @{variables('filter_condition')}\n                    <pagesize>@{variables('page_size')}</pagesize>\n                    <options>\n                        <returnformat>csv</returnformat>\n                    </options>\n                    <offset>\n                        @{variables('offset')}\n                    </offset>\n                </query>\n            </function>\n        </content>\n    </operation>\n</request>",
+														"type": "Expression"
+													},
+													"requestTimeout": ""
+												},
+												"formatSettings": {
+													"type": "DelimitedTextReadSettings"
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false,
+											"enableSkipIncompatibleRow": true,
+											"logSettings": {
+												"enableCopyActivityLog": true,
+												"copyActivityLogSettings": {
+													"logLevel": "Warning",
+													"enableReliableLogging": false
+												},
+												"logLocationSettings": {
+													"linkedServiceName": {
+														"referenceName": "LS_SpireDF_Blob_MSI",
+														"type": "LinkedServiceReference"
+													},
+													"path": "sageintacct/PL_SageIntacct/logs/"
+												}
+											},
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": false,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_SageIntacct_CSV",
+												"type": "DatasetReference"
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@{pipeline().parameters.data_output_path}/@{replace(pipeline().parameters.table_name,'.json','')}",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@concat(pipeline().parameters.table_name,variables('offset'),'.csv')",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "Set offset to source row counts if query fails",
+										"type": "SetVariable",
+										"dependsOn": [
+											{
+												"activity": "Copy From API to CSV From Query",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "offset",
+											"value": {
+												"value": "@variables('total_source_records')",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "Get Metadata For Error Handling",
+										"type": "GetMetadata",
+										"dependsOn": [
+											{
+												"activity": "Copy From API to CSV From Query",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataset": {
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@{pipeline().parameters.data_output_path}/@{replace(pipeline().parameters.table_name,'.json','')}",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@concat(pipeline().parameters.table_name,variables('offset'),'.csv')",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											},
+											"fieldList": [
+												"structure",
+												"columnCount"
+											],
+											"storeSettings": {
+												"type": "AzureBlobStorageReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "DelimitedTextReadSettings"
+											}
+										}
+									}
+								]
+							}
+						}
+					],
+					"timeout": "0.12:00:00"
+				}
+			},
+			{
+				"name": "Get Total Source Record Count",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Switch1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [
+					{
+						"name": "item",
+						"value": "@pipeline().parameters.table_name"
+					}
+				],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/xml"
+					},
+					"url": "https://api.intacct.com/ia/xml/xmlgw.phtml/",
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": {
+						"value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n    <control>\n        <senderid>@{activity('Get Control SenderId').output.value}</senderid>\n        <password>@{activity('Get Control Password').output.value}</password>\n        <controlid>@{div(sub(ticks(utcNow()), ticks('1970-01-01')),10000000)}</controlid>\n        <uniqueid>false</uniqueid>\n        <dtdversion>3.0</dtdversion>\n        <includewhitespace>false</includewhitespace>\n    </control>\n    <operation>\n        <authentication>\n        \t<sessionid>@{pipeline().parameters.session_id}</sessionid>\n        </authentication>\n        <content>\n            <function controlid=\"@{guid()}\">\n                <query>\n                    <select>\n                        @{activity('Get XML Fields').output.firstRow['xml_columns']}\n                    </select>\n                    <object>@{pipeline().parameters.table_name}</object>\n                    @{variables('filter_condition')}\n                    <pagesize>10</pagesize>\n                    <offset>\n                        @{variables('offset')}\n                    </offset>\n                </query>\n            </function>\n        </content>\n    </operation>\n</request>",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set total source record count",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Get Total Source Record Count",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [
+					{
+						"name": "item",
+						"value": "@pipeline().parameters.table_name"
+					}
+				],
+				"typeProperties": {
+					"variableName": "total_source_records",
+					"value": {
+						"value": "@int(json(xml(activity('Get Total Source Record Count').output.Response))['response']['operation']['result']['data']['@totalcount'])",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Switch1",
+				"type": "Switch",
+				"dependsOn": [
+					{
+						"activity": "Get XML Fields",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"on": {
+						"value": "@pipeline().parameters.config_object['table_name']",
+						"type": "Expression"
+					},
+					"cases": [
+						{
+							"value": "GLDETAIL",
+							"activities": [
+								{
+									"name": "Set filter for GLDETAIL",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "filter_condition",
+										"value": {
+											"value": "<filter><and><greaterthanorequalto><field>BATCH_DATE</field><value>@{formatDateTime(addDays(utcNow(),-30),'MM/dd/yyyy')}</value></greaterthanorequalto><lessthanorequalto><field>BATCH_DATE</field><value>@{formatDateTime(utcNow(),'MM/dd/yyyy')}</value></lessthanorequalto><greaterthan><field>MODULEKEY</field><value>''</value></greaterthan></and></filter>",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"value": "GLBATCH",
+							"activities": [
+								{
+									"name": "Set filter for GLBATCH",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "filter_condition",
+										"value": {
+											"value": "<filter><and><greaterthanorequalto><field>BATCH_DATE</field><value>@{formatDateTime(addDays(utcNow(),-30),'MM/dd/yyyy')}</value></greaterthanorequalto><lessthanorequalto><field>BATCH_DATE</field><value>@{formatDateTime(utcNow(),'MM/dd/yyyy')}</value></lessthanorequalto></and></filter>",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"value": "GLENTRY",
+							"activities": [
+								{
+									"name": "Set filter for GLENTRY",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "filter_condition",
+										"value": {
+											"value": "<filter><and><greaterthanorequalto><field>BATCH_DATE</field><value>@{formatDateTime(addDays(utcNow(),-30),'MM/dd/yyyy')}</value></greaterthanorequalto><lessthanorequalto><field>BATCH_DATE</field><value>@{formatDateTime(utcNow(),'MM/dd/yyyy')}</value></lessthanorequalto><equalto><field>STATE</field><value>Posted</value></equalto></and></filter>",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Set last_load_time",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "last_load_time",
+					"value": {
+						"value": "@formatDateTime(convertTimeZone(utcNow(),'UTC','Eastern Standard Time'),'yyyy-MM-dd hh:mm:ss')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "If CSV FIles",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Fetch Data Until Last Record",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(pipeline().parameters.config_object.method_to_use,'query')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Combine JSON Pages Into Single File",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item()",
+									"value": "@pipeline().parameters.table_name"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "JsonSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"wildcardFolderPath": {
+											"value": "@{pipeline().parameters.data_output_path}/@{replace(pipeline().parameters.table_name,'.json','')}",
+											"type": "Expression"
+										},
+										"wildcardFileName": "*.json",
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "JsonReadSettings"
+									}
+								},
+								"sink": {
+									"type": "JsonSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings",
+										"copyBehavior": "MergeFiles"
+									},
+									"formatSettings": {
+										"type": "JsonWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_MultiFile_JSON",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.data_output_path}/@{pipeline().parameters.config_object.table_name}",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_JSON",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@pipeline().parameters.data_output_path",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@concat(pipeline().parameters.config_object.table_name,'_DATA.json')",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Delete JSON Folder",
+							"type": "Delete",
+							"dependsOn": [
+								{
+									"activity": "Combine JSON Pages Into Single File",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DS_AzureBlob_Spire_MultiFile_JSON",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.data_output_path}/@{pipeline().parameters.config_object.table_name}",
+											"type": "Expression"
+										}
+									}
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Combine Pages Into Single File",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item()",
+									"value": "@pipeline().parameters.table_name"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"wildcardFolderPath": {
+											"value": "@{pipeline().parameters.data_output_path}/@{replace(pipeline().parameters.table_name,'.json','')}",
+											"type": "Expression"
+										},
+										"wildcardFileName": "*.csv",
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings",
+										"copyBehavior": "MergeFiles"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"enableSkipIncompatibleRow": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": false,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_MultiFile_CSV_For_Sage",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.data_output_path}/@{replace(pipeline().parameters.table_name,'.json','')}",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_container",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@pipeline().parameters.data_output_path",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@{concat(pipeline().parameters.config_object.table_name,'_DATA.csv')}",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_container",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Delete CSV folder",
+							"type": "Delete",
+							"dependsOn": [
+								{
+									"activity": "Combine Pages Into Single File",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DS_AzureBlob_Spire_MultiFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.data_output_path}/@{pipeline().parameters.config_object.table_name}",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_container",
+											"type": "Expression"
+										}
+									}
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"tgt_container": {
+				"type": "string"
+			},
+			"data_output_path": {
+				"type": "string"
+			},
+			"metadata_output_path": {
+				"type": "string"
+			},
+			"table_name": {
+				"type": "string"
+			},
+			"session_id": {
+				"type": "string"
+			},
+			"config_object": {
+				"type": "object"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"tgt_db": {
+				"type": "string"
+			},
+			"tgt_schema": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"page_size": {
+				"type": "Integer",
+				"defaultValue": 2000
+			},
+			"records_copied": {
+				"type": "Integer",
+				"defaultValue": 0
+			},
+			"offset": {
+				"type": "Integer",
+				"defaultValue": 0
+			},
+			"temp_offset": {
+				"type": "Integer"
+			},
+			"filter_condition": {
+				"type": "String"
+			},
+			"total_source_records": {
+				"type": "Integer"
+			},
+			"additional_columns": {
+				"type": "Array"
+			},
+			"last_load_time": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_SageIntacct"
+		},
+		"annotations": []
+	}
+}

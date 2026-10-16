@@ -1,0 +1,578 @@
+{
+	"name": "PL_S3DataFetch",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Latest Files",
+				"description": "Get Latest Files",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_S3_Binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"sec_access_key": {
+								"value": "@pipeline().parameters.sec_access_key",
+								"type": "Expression"
+							},
+							"sec_secret_access_key": {
+								"value": "@pipeline().parameters.sec_secret_access_key",
+								"type": "Expression"
+							},
+							"bucket": {
+								"value": "@pipeline().parameters.src_bucket",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.src_path",
+								"type": "Expression"
+							},
+							"file": {
+								"value": "@concat(\r\n    '*',\r\n    pipeline().parameters.file_date,\r\n    '*',\r\n    if(equals(pipeline().parameters.table_load_group,'Priority'), 'priority', ''),\r\n    '*',\r\n    '.zip'\r\n)\r\n",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AmazonS3ReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Fetch Each File",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Filter Only Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Filter Only Files').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Copy If File Dont Exists",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@if(\n    equals(pipeline().parameters.table_load_group, 'Priority'),\n    bool(1),\n    or(\n        equals(indexof(item().name, 'priority'), -1),\n        not(pipeline().parameters.skip_priority_file)\n    )\n)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Copy File From S3",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@item().name"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "BinarySource",
+												"storeSettings": {
+													"type": "AmazonS3ReadSettings",
+													"recursive": true
+												},
+												"formatSettings": {
+													"type": "BinaryReadSettings"
+												}
+											},
+											"sink": {
+												"type": "BinarySink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings",
+													"copyBehavior": "PreserveHierarchy"
+												}
+											},
+											"enableStaging": false
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_S3_Binary",
+												"type": "DatasetReference",
+												"parameters": {
+													"sec_access_key": {
+														"value": "@pipeline().parameters.sec_access_key",
+														"type": "Expression"
+													},
+													"sec_secret_access_key": {
+														"value": "@pipeline().parameters.sec_secret_access_key",
+														"type": "Expression"
+													},
+													"bucket": {
+														"value": "@pipeline().parameters.src_bucket",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.src_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().name",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_Singlefile_Binary",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.tgt_zip_output_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().name",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "UnZip And Decrypt The Files",
+										"type": "Custom",
+										"dependsOn": [
+											{
+												"activity": "Copy File From S3",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.00:45:00",
+											"retry": 1,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@item().name"
+											}
+										],
+										"typeProperties": {
+											"command": {
+												"value": "/bin/bash -c \" \\\nln -s /datadisk $(pwd)/datadisk && \\\npython3 decrypt_modmed_zip.py \\\n    --keyvault_url=@{pipeline().globalParameters.ENV_KV_BASE_URL}/ \\\n    --sec_password_name=@{pipeline().parameters.dec_password_sec} \\\n    --sec_private_key_name=@{pipeline().parameters.dec_private_key_sec} \\\n    --blob_url=@{pipeline().globalParameters.ENV_AZURE_BLOB_ACCOUNT_URL}/ \\\n    --blob_container=@{pipeline().parameters.tgt_container} \\\n    --blob_input_file=@{pipeline().parameters.tgt_zip_output_path}/@{item().name} \\\n    --blob_output_path=@{pipeline().parameters.tgt_zip_output_path}/@{replace(item().name,'.zip','')}\"",
+												"type": "Expression"
+											},
+											"resourceLinkedService": {
+												"referenceName": "LS_SpireDF_Blob_MSI",
+												"type": "LinkedServiceReference"
+											},
+											"folderPath": {
+												"value": "@pipeline().parameters.decrypt_script_path",
+												"type": "Expression"
+											},
+											"referenceObjects": {
+												"linkedServices": [],
+												"datasets": []
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "LS_AzureBatch_Modmed",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "Append Files To Process",
+										"type": "AppendVariable",
+										"dependsOn": [
+											{
+												"activity": "UnZip And Decrypt The Files",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@item().name"
+											}
+										],
+										"typeProperties": {
+											"variableName": "files_to_process",
+											"value": {
+												"value": "@item().name",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Set Files Copied As PL return Values",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "For All Decrypted Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "files_loaded",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('files_to_process')"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			},
+			{
+				"name": "For All Decrypted Files",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Fetch Each File",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('files_to_process')",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 2,
+					"activities": [
+						{
+							"name": "UnZip The Decrypted File",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@item()"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": false,
+										"deleteFilesAfterCompletion": false
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings",
+										"compressionProperties": {
+											"type": "ZipDeflateReadSettings",
+											"preserveZipFileNameAsFolder": false
+										}
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_Singlefile_Binary_ZIP",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.tgt_zip_output_path}/@{replace(item(),'.zip','')}",
+											"type": "Expression"
+										},
+										"file": "onsmd.zip"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_container",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.tgt_zip_output_path}/@{replace(item(),'.zip','')}",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "If Processing Priority Or All File",
+							"description": "Only copy priority file to csv if load type is Priority, otherwise only load the all file",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "UnZip The Decrypted File",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@or(\n    equals(pipeline().parameters.table_load_group, 'Priority'),\n    equals(indexof(item(), 'priority'), -1)    \n)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Execute PL_Momed_Copy_TXT_To_CSV",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@item()"
+											}
+										],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "PL_Modmed_Copy_TXT_To_CSV",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"tgt_data_output_path": {
+													"value": "@pipeline().parameters.tgt_data_output_path",
+													"type": "Expression"
+												},
+												"tgt_container": {
+													"value": "@pipeline().parameters.tgt_container",
+													"type": "Expression"
+												},
+												"src_txt_files_path": {
+													"value": "@{pipeline().parameters.tgt_zip_output_path}/@{replace(item(),'.zip','')}/onsmd",
+													"type": "Expression"
+												},
+												"table_load_group": {
+													"value": "@if(contains(item(),'enc_priority'),'Priority','All')",
+													"type": "Expression"
+												},
+												"config_table_db": {
+													"value": "@pipeline().parameters.config_table_db",
+													"type": "Expression"
+												},
+												"config_table_schema": {
+													"value": "@pipeline().parameters.config_table_schema",
+													"type": "Expression"
+												},
+												"config_table_name": {
+													"value": "@pipeline().parameters.config_table",
+													"type": "Expression"
+												},
+												"source_key": {
+													"value": "@pipeline().parameters.source_key",
+													"type": "Expression"
+												},
+												"main_pipeline_run_id": {
+													"value": "@pipeline().parameters.main_pipeline_run_id",
+													"type": "Expression"
+												},
+												"main_pipeline_name": {
+													"value": "@pipeline().parameters.main_pipeline_name",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Filter Only Files",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Get Latest Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Latest Files').output.childItems",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@equals(item().type, 'File')",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"file_date": {
+				"type": "string"
+			},
+			"src_bucket": {
+				"type": "string"
+			},
+			"src_path": {
+				"type": "string"
+			},
+			"tgt_container": {
+				"type": "string"
+			},
+			"tgt_data_output_path": {
+				"type": "string"
+			},
+			"tgt_zip_output_path": {
+				"type": "string"
+			},
+			"tgt_metadata_output_path": {
+				"type": "string"
+			},
+			"config_table_db": {
+				"type": "string"
+			},
+			"config_table": {
+				"type": "string"
+			},
+			"source_key": {
+				"type": "string"
+			},
+			"config_table_schema": {
+				"type": "string"
+			},
+			"table_load_group": {
+				"type": "string"
+			},
+			"sec_access_key": {
+				"type": "string"
+			},
+			"sec_secret_access_key": {
+				"type": "string"
+			},
+			"dec_password_sec": {
+				"type": "string"
+			},
+			"dec_private_key_sec": {
+				"type": "string"
+			},
+			"decrypt_script_path": {
+				"type": "string"
+			},
+			"skip_priority_file": {
+				"type": "bool",
+				"defaultValue": false
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"files_to_process": {
+				"type": "Array"
+			},
+			"skip_priority_file": {
+				"type": "Boolean",
+				"defaultValue": false
+			}
+		},
+		"folder": {
+			"name": "Job_Modmed"
+		},
+		"annotations": []
+	}
+}
