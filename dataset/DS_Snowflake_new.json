@@ -1,0 +1,54 @@
+{
+	"name": "DS_Snowflake_new",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Snowflake_",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"conn_str_sec": {
+					"value": "@dataset().conn_str_sec",
+					"type": "Expression"
+				},
+				"database": {
+					"value": "@dataset().database",
+					"type": "Expression"
+				},
+				"warehouse": {
+					"value": "@dataset().warehouse",
+					"type": "Expression"
+				},
+				"user_name": {
+					"value": "@dataset().user_name",
+					"type": "Expression"
+				},
+				"account_name": {
+					"value": "@dataset().account_name",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"conn_str_sec": {
+				"type": "string"
+			},
+			"database": {
+				"type": "string"
+			},
+			"warehouse": {
+				"type": "string"
+			},
+			"user_name": {
+				"type": "string"
+			},
+			"account_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Snowflake"
+		},
+		"annotations": [],
+		"type": "SnowflakeV2Table",
+		"schema": []
+	}
+}

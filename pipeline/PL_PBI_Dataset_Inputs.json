@@ -1,0 +1,80 @@
+{
+	"name": "PL_PBI_Dataset_Inputs",
+	"properties": {
+		"description": "Input array example;\n\n[\n  {\n    \"pbiWorkspaceId\": \"workspace-id-1\",    \n    \"pbiDatasetName\": \"Modmed\",    \n    \"pbiDatasetId\": \"dataset-id-1\",\n    \"pollingIntervalInSeconds\": 300\n  },\n  {\n    \"pbiWorkspaceId\": \"workspace-id-2\",\n    \"pbiDatasetName\": \"Finance\",    \n    \"pbiDatasetId\": \"dataset-id-2\",\n    \"pollingIntervalInSeconds\": 300\n  },\n  {\n    \"pbiWorkspaceId\": \"workspace-id-3\",\n    \"pbiDatasetName\": \"Inventory\",    \n    \"pbiDatasetId\": \"dataset-id-3\",\n    \"pollingIntervalInSeconds\": 300\n  }\n]\n",
+		"activities": [
+			{
+				"name": "For Each Dataset",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.pbiDatasetInputs",
+						"type": "Expression"
+					},
+					"batchCount": 6,
+					"activities": [
+						{
+							"name": "Has Dataset Name",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@not(empty(item().pbiDatasetName))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Refresh Dataset",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "PL_PBI_Dataset_Refresh",
+												"type": "PipelineReference"
+											},
+											"parameters": {
+												"pbiDatasetName": {
+													"value": "@item().pbiDatasetName",
+													"type": "Expression"
+												},
+												"pbiWorkspaceId": {
+													"value": "@item().pbiWorkspaceId",
+													"type": "Expression"
+												},
+												"pbiDatasetId": {
+													"value": "@item().pbiDatasetId",
+													"type": "Expression"
+												},
+												"pollingIntervalInSeconds": {
+													"value": "@item().pollingIntervalInSeconds",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"pbiDatasetInputs": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "Shared_PBI_Refresh_Pipelines"
+		},
+		"annotations": []
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

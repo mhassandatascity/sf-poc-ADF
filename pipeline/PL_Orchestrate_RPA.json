@@ -1,0 +1,56 @@
+{
+	"name": "PL_Orchestrate_RPA",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set Range",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@range(11,13)",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Fetch Appointments",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_Fetch_Appointments",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"START_TIME": {
+										"value": "@string(addToTime(startOfDay(utcNow()),item(),'Hour'))",
+										"type": "Expression"
+									},
+									"END_TIME": {
+										"value": "@string(addToTime(startOfDay(utcNow()),add(item(), 1),'Hour'))",
+										"type": "Expression"
+									},
+									"RUN_ID": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"folder": {
+			"name": "Job_RPA"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,664 @@
+{
+	"name": "PL_AzureBlob_Data_Fetch_CSV_To_CSV",
+	"properties": {
+		"activities": [
+			{
+				"name": "Move Data From File Drop",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"wildcardFolderPath": {
+								"value": "@pipeline().parameters.src_container_folder",
+								"type": "Expression"
+							},
+							"wildcardFileName": "*.csv",
+							"deleteFilesAfterCompletion": true
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.src_container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.src_container_folder",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.tgt_container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.csv_output_path",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "Get CSV File Names",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Move Data From File Drop",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.tgt_container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.csv_output_path",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems",
+						"exists"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "If CSV Files Exist",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Get CSV File Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Get CSV File Names').output.exists",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set csv_file_list",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "csv_file_list",
+								"value": {
+									"value": "@activity('Get CSV File Names').output.childItems",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "For Each Final Mapping",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "For Each CSV Mapping",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('csv_to_csv_mapping')",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "If Convert CRLF",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@item().convert_crlf",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Copy CSV to CSV",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().output_file}"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "DelimitedTextSource",
+												"storeSettings": {
+													"type": "AzureBlobStorageReadSettings",
+													"recursive": true,
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "DelimitedTextReadSettings"
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false,
+											"validateDataConsistency": true,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": false,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.csv_output_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().input_file",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.data_output_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().output_file",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Copy CSV With CRLF to CSV",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().output_file}"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "DelimitedTextSource",
+												"storeSettings": {
+													"type": "AzureBlobStorageReadSettings",
+													"recursive": true,
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "DelimitedTextReadSettings"
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false,
+											"validateDataConsistency": true,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": false,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV_CRLF",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.csv_output_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().input_file",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.data_output_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().output_file",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "For Each CSV Mapping",
+				"description": "Create mapping of actual file names to destination file names",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "If CSV Files Exist",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get Table List",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Table List').output.pipelineReturnValue.TableNames",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Set curr_mapping_pattern",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().output_file}"
+								}
+							],
+							"typeProperties": {
+								"variableName": "curr_mapping_pattern",
+								"value": {
+									"value": "@item().input_file_pattern",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Filter For File By Pattern",
+							"type": "Filter",
+							"dependsOn": [
+								{
+									"activity": "Set curr_mapping_pattern",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().output_file}"
+								}
+							],
+							"typeProperties": {
+								"items": {
+									"value": "@variables('csv_file_list')",
+									"type": "Expression"
+								},
+								"condition": {
+									"value": "@contains(item().name, variables('curr_mapping_pattern'))",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "If Exists File With Pattern Match",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Filter For File By Pattern",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().output_file}"
+								}
+							],
+							"typeProperties": {
+								"expression": {
+									"value": "@greater(activity('Filter For File By Pattern').output.FilteredItemsCount, 0)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Set curr_mapping_json_str",
+										"description": "create a json string for the full mapping",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().output_file}"
+											}
+										],
+										"typeProperties": {
+											"variableName": "curr_mapping_json_str",
+											"value": {
+												"value": "{\n    \"input_file\": \"@{activity('Filter For File By Pattern').output.value[0].name}\",\n    \"output_file\": \"@{item().output_file}\",\n    \"convert_crlf\": @{toLower(string(item().convert_crlf))}\n}",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "Append xlsx_to_csv_mapping",
+										"type": "AppendVariable",
+										"dependsOn": [
+											{
+												"activity": "Set curr_mapping_json_str",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().output_file}"
+											}
+										],
+										"typeProperties": {
+											"variableName": "csv_to_csv_mapping",
+											"value": {
+												"value": "@json(variables('curr_mapping_json_str'))",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get Table List",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Move Data From File Drop",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Fetch_Source_Table_Configs",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"table": {
+							"value": "@pipeline().parameters.config_table",
+							"type": "Expression"
+						},
+						"database": {
+							"value": "@pipeline().parameters.config_database",
+							"type": "Expression"
+						},
+						"table_schema": {
+							"value": "@pipeline().parameters.config_table_schema",
+							"type": "Expression"
+						},
+						"addl_tbl_filter": {
+							"value": "SourceKey = @{pipeline().parameters.source_key}\nAND\nLoadGroup = '@{pipeline().parameters.table_load_group}'",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"src_container": {
+				"type": "string"
+			},
+			"src_container_folder": {
+				"type": "string",
+				"defaultValue": "filedrops"
+			},
+			"tgt_container": {
+				"type": "string"
+			},
+			"csv_output_path": {
+				"type": "string"
+			},
+			"data_output_path": {
+				"type": "string"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"source_key": {
+				"type": "string"
+			},
+			"table_load_group": {
+				"type": "string"
+			},
+			"config_table": {
+				"type": "string"
+			},
+			"config_database": {
+				"type": "string"
+			},
+			"config_table_schema": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"csv_to_csv_mapping": {
+				"type": "Array"
+			},
+			"curr_mapping_pattern": {
+				"type": "String"
+			},
+			"curr_mapping_json_str": {
+				"type": "String"
+			},
+			"csv_file_list": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "Shared_File_Drop_Pipelines"
+		},
+		"annotations": []
+	}
+}

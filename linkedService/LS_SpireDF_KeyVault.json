@@ -1,0 +1,10 @@
+{
+	"name": "LS_SpireDF_KeyVault",
+	"properties": {
+		"annotations": [],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "https://kvseadeveus2.vault.azure.net/"
+		}
+	}
+}

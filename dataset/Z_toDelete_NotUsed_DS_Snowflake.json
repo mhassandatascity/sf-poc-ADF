@@ -1,0 +1,54 @@
+{
+	"name": "Z_toDelete_NotUsed_DS_Snowflake",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Snowflake_Spire",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"warehouse": {
+					"value": "@dataset().WAREHOUSE_NAME",
+					"type": "Expression"
+				},
+				"database": {
+					"value": "@dataset().DB_NAME",
+					"type": "Expression"
+				},
+				"user_name": {
+					"value": "@dataset().USERNAME",
+					"type": "Expression"
+				},
+				"role": {
+					"value": "@dataset().ROLE",
+					"type": "Expression"
+				},
+				"account_name": {
+					"value": "@dataset().ACCOUNT_NAME",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"WAREHOUSE_NAME": {
+				"type": "String"
+			},
+			"DB_NAME": {
+				"type": "String"
+			},
+			"USERNAME": {
+				"type": "String"
+			},
+			"ROLE": {
+				"type": "String"
+			},
+			"ACCOUNT_NAME": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Snowflake"
+		},
+		"annotations": [],
+		"type": "SnowflakeV2Table",
+		"schema": []
+	}
+}

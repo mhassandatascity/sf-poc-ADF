@@ -1,0 +1,48 @@
+{
+	"name": "DS_AzureBlob_Spire_MultiFile_CSV",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SpireDF_Blob_SAS",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"auth_sas_url_sec": "@dataset().auth_sas_url_sec"
+			}
+		},
+		"parameters": {
+			"auth_sas_url_sec": {
+				"type": "string"
+			},
+			"path": {
+				"type": "string"
+			},
+			"container": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Shared"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"folderPath": {
+					"value": "@dataset().path",
+					"type": "Expression"
+				},
+				"container": {
+					"value": "@dataset().container",
+					"type": "Expression"
+				}
+			},
+			"columnDelimiter": ",",
+			"rowDelimiter": "\n",
+			"encodingName": "UTF-8",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}

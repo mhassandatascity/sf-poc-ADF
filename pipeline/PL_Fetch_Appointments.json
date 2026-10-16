@@ -1,0 +1,516 @@
+{
+	"name": "PL_Fetch_Appointments",
+	"properties": {
+		"activities": [
+			{
+				"name": "Pagination Loop",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Get Exclude List",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(variables('LAST_PAGE'),true)",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Is Last Page",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "GET Appointments",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@less(activity('GET Appointments').output['total'], 50)",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Set Next URL",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "APPT_URL",
+											"value": {
+												"value": "@activity('GET Appointments').output['link'][1]['url']",
+												"type": "Expression"
+											}
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Indicate Last Page",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "LAST_PAGE",
+											"value": true
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Appointments Available",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Is Last Page",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@greater(activity('GET Appointments').output['total'], 0)",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "No Appointments",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "OUTPUT",
+											"value": "No Appointments Found"
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Process Appointments",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"policy": {
+											"secureInput": true
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "PL_Process_Appointments",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"APPOINTMENTS": {
+													"value": "@activity('GET Appointments').output['entry']",
+													"type": "Expression"
+												},
+												"BEARER": {
+													"value": "@concat('Bearer ', activity('Authenticate API').output['access_token'])",
+													"type": "Expression"
+												},
+												"EXCLUDE": {
+													"value": "@activity('Get Exclude List').output.value",
+													"type": "Expression"
+												},
+												"API_KEY": "@activity('Get API Key').output.value",
+												"DOCTORS": {
+													"value": "@activity('Get Doctors').output.value",
+													"type": "Expression"
+												},
+												"RUN_ID": {
+													"value": "@pipeline().parameters.RUN_ID",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "GET Appointments",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"headers": {
+									"accept": "application/fhir+json",
+									"authorization": {
+										"value": "@concat('Bearer ', activity('Authenticate API').output['access_token'])",
+										"type": "Expression"
+									},
+									"x-api-key": "@activity('Get API Key').output.value"
+								},
+								"url": {
+									"value": "@variables('APPT_URL')",
+									"type": "Expression"
+								}
+							}
+						}
+					],
+					"timeout": "0.12:00:00"
+				}
+			},
+			{
+				"name": "Get Password",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get Username",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@concat(pipeline().globalParameters.ENV_KV_BASE_URL, '/secrets/sec-modmed-rpa-password?api-version=7.5')",
+						"type": "Expression"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get API Key",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get Password",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@concat(pipeline().globalParameters.ENV_KV_BASE_URL, '/secrets/sec-modmed-rpa-api-key?api-version=7.5')",
+						"type": "Expression"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get Username",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get URL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@concat(pipeline().globalParameters.ENV_KV_BASE_URL, '/secrets/sec-modmed-rpa-username?api-version=7.5')",
+						"type": "Expression"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get URL",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@concat(pipeline().globalParameters.ENV_KV_BASE_URL, '/secrets/sec-modmed-rpa-url?api-version=7.5')",
+						"type": "Expression"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get Doctors",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Set Starting URL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "@concat('select s.staff_id from ',pipeline().globalParameters.ENV_STAGE,'_RAW.SPIRE_INTERNAL_DATA.RAW_PROVIDER_TAXONOMY pt INNER JOIN ', pipeline().globalParameters.ENV_STAGE, '_RAW.MODMEDSTAGING.STAFF s on pt.NPI = s.NPI')",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_Snowflake_Spire_AZIR",
+						"type": "DatasetReference",
+						"parameters": {
+							"warehouse": "RPA_INGESTION_WH",
+							"database": {
+								"value": "@concat(pipeline().globalParameters.ENV_STAGE, '_RAW')",
+								"type": "Expression"
+							},
+							"user_name": {
+								"value": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_ADF')",
+								"type": "Expression"
+							},
+							"role": {
+								"value": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_INGESTION_ROLE')",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Get Exclude List",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Get Doctors",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "@concat('SELECT APPOINTMENT_ID FROM ', pipeline().globalParameters.ENV_STAGE, '_RAW.RPA_TRACKING.RPA_AUDIT WHERE INSERT_TIMESTAMP > ''',string(startOfDay(adddays(utcNow(), -1))), '''' )",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_Snowflake_Spire_AZIR",
+						"type": "DatasetReference",
+						"parameters": {
+							"warehouse": "RPA_INGESTION_WH",
+							"database": "@concat(pipeline().globalParameters.ENV_STAGE, '_RAW')",
+							"user_name": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_ADF')",
+							"role": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_INGESTION_ROLE')"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Authenticate API",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get API Key",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"accept": "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+						"x-api-key": {
+							"value": "@activity('Get API Key').output.value",
+							"type": "Expression"
+						}
+					},
+					"url": {
+						"value": "@concat(activity('Get URL').output.value,'ons/ema/ws/oauth2/grant')",
+						"type": "Expression"
+					},
+					"body": {
+						"value": "@concat('grant_type=password&username=',activity('Get Username').output.value,'&password=', activity('Get Password').output.value)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Starting URL",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Authenticate API",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "APPT_URL",
+					"value": {
+						"value": "@concat(activity('Get URL').output.value, 'ons/ema/fhir/v2/Appointment?date=ge', pipeline().parameters.START_TIME, '&date=le', pipeline().parameters.END_TIME,'&status=pending,booked,arrived,checked-in' )",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"START_TIME": {
+				"type": "string"
+			},
+			"END_TIME": {
+				"type": "string"
+			},
+			"RUN_ID": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"LAST_PAGE": {
+				"type": "Boolean",
+				"defaultValue": false
+			},
+			"APPT_URL": {
+				"type": "String"
+			},
+			"TEST_DATE": {
+				"type": "String"
+			},
+			"CURR_ID": {
+				"type": "String"
+			},
+			"PATIENT_ID": {
+				"type": "String"
+			},
+			"PRACTITIONER_ID": {
+				"type": "String"
+			},
+			"LOCATION_ID": {
+				"type": "String"
+			},
+			"OUTPUT": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_RPA"
+		},
+		"annotations": []
+	}
+}

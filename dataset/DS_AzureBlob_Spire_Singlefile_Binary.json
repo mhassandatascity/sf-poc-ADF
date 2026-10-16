@@ -1,0 +1,48 @@
+{
+	"name": "DS_AzureBlob_Spire_Singlefile_Binary",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SpireDF_Blob_SAS",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"auth_sas_url_sec": "@dataset().auth_sas_url_sec"
+			}
+		},
+		"parameters": {
+			"auth_sas_url_sec": {
+				"type": "string"
+			},
+			"container": {
+				"type": "string"
+			},
+			"path": {
+				"type": "string"
+			},
+			"file": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Shared"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@dataset().file",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().path",
+					"type": "Expression"
+				},
+				"container": {
+					"value": "@dataset().container",
+					"type": "Expression"
+				}
+			}
+		}
+	}
+}

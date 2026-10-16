@@ -1,0 +1,57 @@
+{
+	"name": "DS_Ascent_SFTP",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Ascent_SFTP",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"sftp_host": {
+					"value": "@dataset().sftp_host",
+					"type": "Expression"
+				},
+				"sftp_port": "22",
+				"sftp_user_name": {
+					"value": "@dataset().sftp_user_name",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"remote_directory": {
+				"type": "string"
+			},
+			"folder": {
+				"type": "string"
+			},
+			"sftp_host": {
+				"type": "string"
+			},
+			"sftp_user_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Ascent"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "SftpLocation",
+				"fileName": {
+					"value": "@dataset().folder",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().remote_directory",
+					"type": "Expression"
+				}
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\"",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}

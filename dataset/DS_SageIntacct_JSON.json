@@ -1,0 +1,20 @@
+{
+	"name": "DS_SageIntacct_JSON",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SageIntacct",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "SageIntacct"
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "HttpServerLocation"
+			}
+		},
+		"schema": {}
+	}
+}

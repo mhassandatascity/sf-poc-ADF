@@ -1,0 +1,54 @@
+{
+	"name": "DS_Snowflake_EMR",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Snowflake_KeyPair",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"warehouse": {
+					"value": "@dataset().warehouse",
+					"type": "Expression"
+				},
+				"database": {
+					"value": "@dataset().database",
+					"type": "Expression"
+				},
+				"user_name": {
+					"value": "@dataset().user_name",
+					"type": "Expression"
+				},
+				"private_key": {
+					"value": "@dataset().private_key",
+					"type": "Expression"
+				},
+				"account_name": {
+					"value": "@dataset().account_name",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"private_key": {
+				"type": "string"
+			},
+			"database": {
+				"type": "string"
+			},
+			"warehouse": {
+				"type": "string"
+			},
+			"user_name": {
+				"type": "string"
+			},
+			"account_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Snowflake"
+		},
+		"annotations": [],
+		"type": "SnowflakeV2Table",
+		"schema": []
+	}
+}

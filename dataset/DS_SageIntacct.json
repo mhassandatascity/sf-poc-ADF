@@ -1,0 +1,19 @@
+{
+	"name": "DS_SageIntacct",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SageIntacct",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "SageIntacct"
+		},
+		"annotations": [],
+		"type": "Xml",
+		"typeProperties": {
+			"location": {
+				"type": "HttpServerLocation"
+			}
+		}
+	}
+}

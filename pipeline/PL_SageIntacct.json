@@ -1,0 +1,494 @@
+{
+	"name": "PL_SageIntacct",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute PL_Output_Paths",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set Config File Folder",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "config_container_folder",
+					"value": {
+						"value": "@pipeline().Pipeline",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Fetch_Table_Column_names",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set Config File Folder",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Fetch_Table_Column_Names",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"config_file": {
+							"value": "@variables('config_file')",
+							"type": "Expression"
+						},
+						"config_container": {
+							"value": "@variables('config_container')",
+							"type": "Expression"
+						},
+						"config_container_folder": {
+							"value": "@variables('config_container_folder')",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"metadata_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.metadata_output_path",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Execute PL_SageIntacct_Data_Fetch",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Fetch_Table_Column_names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_SageIntacct_Data_Fetch",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"config_container": {
+							"value": "@variables('config_container')",
+							"type": "Expression"
+						},
+						"config_container_folder": {
+							"value": "@variables('config_container_folder')",
+							"type": "Expression"
+						},
+						"config_file": {
+							"value": "@variables('config_file')",
+							"type": "Expression"
+						},
+						"session_id": {
+							"value": "@activity('Execute PL_Fetch_Table_Column_names').output.pipelineReturnValue.session_id",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"data_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"metadata_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.metadata_output_path",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "PL_DBT_LOG_FILE_FOLDER_SF",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_LOG_FILE_FOLDER_SF",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"FolderDate": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "DBT Ingest SageIntacct",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_SageIntacct_Data_Fetch",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/SageStaging"
+					}
+				}
+			},
+			{
+				"name": "DBT Test SageIntacct",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Ingest SageIntacct",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/SageStaging",
+						"dbt_command": "test"
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Fetch_Table_Column_names_copy1",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Wait 5 min",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Fetch_Table_Column_Names",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"config_file": {
+							"value": "@variables('config_file')",
+							"type": "Expression"
+						},
+						"config_container": {
+							"value": "@variables('config_container')",
+							"type": "Expression"
+						},
+						"config_container_folder": {
+							"value": "@variables('config_container_folder')",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"metadata_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.metadata_output_path",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Wait 5 min",
+				"description": "",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Fetch_Table_Column_names",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 300
+				}
+			},
+			{
+				"name": "Execute PL_SageIntacct_Data_Fetch_copy1",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Fetch_Table_Column_names_copy1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_SageIntacct_Data_Fetch",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"config_container": {
+							"value": "@variables('config_container')",
+							"type": "Expression"
+						},
+						"config_container_folder": {
+							"value": "@variables('config_container_folder')",
+							"type": "Expression"
+						},
+						"config_file": {
+							"value": "@variables('config_file')",
+							"type": "Expression"
+						},
+						"session_id": {
+							"value": "@activity('Execute PL_Fetch_Table_Column_names_copy1').output.pipelineReturnValue.session_id",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"data_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"metadata_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.metadata_output_path",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "DBT Ingest SageIntacct_copy1",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_SageIntacct_Data_Fetch_copy1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/SageStaging"
+					}
+				}
+			},
+			{
+				"name": "DBT Test SageIntacct_copy1",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Ingest SageIntacct_copy1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/SageStaging",
+						"dbt_command": "test"
+					}
+				}
+			}
+		],
+		"policy": {
+			"elapsedTimeMetric": {
+				"duration": "00.02:30:00"
+			}
+		},
+		"variables": {
+			"config_container": {
+				"type": "String",
+				"defaultValue": "utility"
+			},
+			"config_container_folder": {
+				"type": "String"
+			},
+			"config_file": {
+				"type": "String",
+				"defaultValue": "src_table_list_snowflake.json"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "sageintacct"
+			},
+			"tgt_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"tgt_db": {
+				"type": "String",
+				"defaultValue": "SageStaging"
+			}
+		},
+		"folder": {
+			"name": "Job_SageIntacct"
+		},
+		"annotations": []
+	}
+}

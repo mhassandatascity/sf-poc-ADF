@@ -1,0 +1,101 @@
+{
+	"name": "PL_Clearwave_snf_copy",
+	"properties": {
+		"activities": [
+			{
+				"name": "ForEachSourceFolder",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.SourceFolders",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "Load Data Into Snowflake",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_Spire",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"warehouse": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+									"database": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+									"user_name": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+									"role": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+									"account_name": "spireortho-aaas.privatelink"
+								}
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.CLEARWAVESTAGING.',toUpper(item()),'_SCHEDULING_WORKFLOW FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.CLEARWAVESTAGING.CLEARWAVE/',item(),' FILE_FORMAT = (TYPE = CSV FIELD_OPTIONALLY_ENCLOSED_BY=''\"'' SKIP_HEADER=1) ON_ERROR = ''ABORT_STATEMENT'';'\n)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"SourceFolders": {
+				"type": "array",
+				"defaultValue": [
+					"middle",
+					"oam",
+					"onsmd",
+					"orthoadc",
+					"osa",
+					"smn"
+				]
+			}
+		},
+		"variables": {
+			"LatestFolder": {
+				"type": "String"
+			},
+			"look_back_period": {
+				"type": "String"
+			},
+			"sftp_host": {
+				"type": "String"
+			},
+			"sftp_user_name": {
+				"type": "String"
+			},
+			"sftp_private_key": {
+				"type": "String"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "clearwave"
+			},
+			"sftp_private_passkey": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_Clearwave"
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-11-24T00:00:00Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

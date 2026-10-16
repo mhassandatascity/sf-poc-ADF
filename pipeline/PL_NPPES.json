@@ -1,0 +1,444 @@
+{
+	"name": "PL_NPPES",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set monthly filename",
+				"description": "fileformat - NPPES_Data_Dissemination_November_2025_V2.zip\n\n@concat('NPPES_Data_Dissemination_',formatDateTime(utcNow(), 'MMMM_yyyy'),'_V2.zip')",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "nppes_monthly_file",
+					"value": {
+						"value": "@concat('NPPES_Data_Dissemination_',formatDateTime(utcNow(), 'MMMM_yyyy'),'_V2.zip')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Download NPPES monthly zip",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Set monthly filename",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "HttpSource",
+						"httpRequestTimeout": "00:10:00"
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings",
+							"copyBehavior": "PreserveHierarchy"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_NPPES_HTTP",
+						"type": "DatasetReference",
+						"parameters": {
+							"RelativeUrl": {
+								"value": "@concat('/nppes/', variables('nppes_monthly_file'))",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_AzureBlob_Spire_Container_Path",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": "@variables('tgt_container')",
+							"path": "@variables('extract_dir')"
+						}
+					}
+				]
+			},
+			{
+				"name": "Copy NPIDATA to SF Stage",
+				"description": "copy only npidata_pfile_*.csv",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Download NPPES monthly zip",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"wildcardFolderPath": {
+								"value": "@concat(variables('extract_dir'), '/', variables('nppes_monthly_file'))\n",
+								"type": "Expression"
+							},
+							"wildcardFileName": "npidata_pfile_*.csv",
+							"deleteFilesAfterCompletion": false
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings",
+							"copyBehavior": "PreserveHierarchy"
+						}
+					},
+					"enableStaging": false,
+					"preserve": []
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_AzureBlob_Spire_Container_Path",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@variables('extract_dir')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_AzureBlob_Spire_Container_Path",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@variables('raw_dir')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "Truncate SF Table - NPIDATA",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Copy NPIDATA to SF Stage",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.1:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_Snowflake_Spire",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"warehouse": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+							"type": "Expression"
+						},
+						"database": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+							"type": "Expression"
+						},
+						"user_name": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+							"type": "Expression"
+						},
+						"role": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+							"type": "Expression"
+						},
+						"account_name": "spireortho-aaas.privatelink"
+					}
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat(\n  'TRUNCATE TABLE ',\n    toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.NPPESSTAGING.NPIDATA;'\n)",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Copy into SF Table - NPIDATA",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Truncate SF Table - NPIDATA",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.0:30:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_Snowflake_Spire",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"warehouse": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+							"type": "Expression"
+						},
+						"database": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+							"type": "Expression"
+						},
+						"user_name": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+							"type": "Expression"
+						},
+						"role": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+							"type": "Expression"
+						},
+						"account_name": "spireortho-aaas.privatelink"
+					}
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat(\n    'COPY INTO ', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.NPPESSTAGING.NPIDATA ',\n    'FROM @', toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW.NPPESSTAGING.NPPES/',\n    formatDateTime(utcNow(), 'MMyyyy'), ' ',\n    'FILE_FORMAT = (TYPE = CSV FIELD_OPTIONALLY_ENCLOSED_BY=''\"'' SKIP_HEADER=1) ',\n    'ON_ERROR = ''ABORT_STATEMENT'' FORCE = FALSE;'\n)\n",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Cleanup temp and raw files",
+				"description": "Remove temp extracted folder and the csv from raw so next run can pick the new file",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Set variable - delete_dirs",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('delete_dirs')",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "Cleanup files",
+							"description": "",
+							"type": "Delete",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.00:20:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DS_AzureBlob_Spire_Container_Path",
+									"type": "DatasetReference",
+									"parameters": {
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@item()",
+											"type": "Expression"
+										}
+									}
+								},
+								"logStorageSettings": {
+									"linkedServiceName": {
+										"referenceName": "LS_SpireDF_Blob_MSI",
+										"type": "LinkedServiceReference"
+									},
+									"path": {
+										"value": "@concat(\n    variables('tgt_container'),\n    '/',\n    'logs/',\n    pipeline().Pipeline,\n    '/'\n)\n",
+										"type": "Expression"
+									}
+								},
+								"enableLogging": true,
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Set variable - delete_dirs",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Total rows loaded",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "delete_dirs",
+					"value": {
+						"value": "@json(concat('[\"', variables('extract_dir'), '\",\"', variables('raw_dir'), '\"]'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Total rows loaded",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Copy into SF Table - NPIDATA",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.0:10:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_Snowflake_Spire",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"warehouse": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+							"type": "Expression"
+						},
+						"database": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+							"type": "Expression"
+						},
+						"user_name": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+							"type": "Expression"
+						},
+						"role": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+							"type": "Expression"
+						},
+						"account_name": "spireortho-aaas.privatelink"
+					}
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "@concat(\n    'SELECT COUNT(*) AS loaded_rows FROM ',\n    toUpper(pipeline().globalParameters.ENV_STAGE),\n    '_RAW.NPPESSTAGING.NPIDATA;'\n)",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"variables": {
+			"nppes_monthly_file": {
+				"type": "String",
+				"defaultValue": "NPPES_Data_Dissemination_October_2025_V2.zip"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "nppes"
+			},
+			"extract_dir": {
+				"type": "String",
+				"defaultValue": "temp"
+			},
+			"raw_dir": {
+				"type": "String",
+				"defaultValue": "@concat(pipeline().Pipeline, '/', 'raw', '/', formatDateTime(utcNow(),'MMyyyy'))"
+			},
+			"delete_dirs": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "Job_NPPES"
+		},
+		"annotations": []
+	}
+}

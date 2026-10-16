@@ -1,0 +1,31 @@
+{
+	"name": "DS_NPPES_HTTP",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_NPPES_HTTP",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"RelativeUrl": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "NPPES"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "HttpServerLocation",
+				"relativeUrl": {
+					"value": "@dataset().RelativeUrl",
+					"type": "Expression"
+				}
+			},
+			"compression": {
+				"type": "ZipDeflate"
+			}
+		}
+	}
+}

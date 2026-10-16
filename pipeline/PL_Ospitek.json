@@ -1,0 +1,395 @@
+{
+	"name": "PL_Ospitek",
+	"properties": {
+		"activities": [
+			{
+				"name": "List SFTP Files",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Calculate Lookback Window",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_Ospitek_SFTP",
+						"type": "DatasetReference",
+						"parameters": {
+							"remote_directory": {
+								"value": "@variables('sftp_remote_directory')",
+								"type": "Expression"
+							},
+							"sftp_host": {
+								"value": "@variables('sftp_host')",
+								"type": "Expression"
+							},
+							"sftp_user_name": {
+								"value": "@variables('sftp_user_name')",
+								"type": "Expression"
+							},
+							"sftp_private_key": {
+								"value": "@variables('sftp_private_key')",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "SftpReadSettings",
+						"recursive": true,
+						"modifiedDatetimeStart": null,
+						"modifiedDatetimeEnd": null,
+						"enablePartitionDiscovery": false,
+						"disableChunking": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Filter Recent Analytics Files",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "List SFTP Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('List SFTP Files').output.childItems",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@and(\n  contains(item().name, 'analytics-'),\n  and(\n    lessOrEquals(formatDateTime(substring(item().name, 10, 10), 'yyyy-MM-dd'), pipeline().TriggerTime),\n    greaterOrEquals(formatDateTime(substring(item().name, 10, 10), 'yyyy-MM-dd'), addDays(pipeline().TriggerTime, variables('look_back_period')))\n  )\n)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Calculate Lookback Window",
+				"description": "",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "look_back_period",
+					"value": {
+						"value": "@sub(0, add(int(pipeline().parameters.LastNFiles), 1))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Load Data Into Snowflake",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Loop Over Filtered Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_Snowflake_Spire",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"warehouse": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+							"type": "Expression"
+						},
+						"database": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+							"type": "Expression"
+						},
+						"user_name": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+							"type": "Expression"
+						},
+						"role": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+							"type": "Expression"
+						},
+						"account_name": "spireortho-aaas.privatelink"
+					}
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.OSPITEKSTAGING.OSPITEK_EXPORT FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.OSPITEKSTAGING.OSPITEK FILE_FORMAT = (TYPE = CSV FIELD_OPTIONALLY_ENCLOSED_BY=''\"'' SKIP_HEADER=1) ON_ERROR = ''ABORT_STATEMENT'';'\n)",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Loop Over Filtered Files",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Filter Recent Analytics Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Filter Recent Analytics Files').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Check File in Blob Storage",
+							"type": "GetMetadata",
+							"dependsOn": [],
+							"policy": {
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DS_Ospitek_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"path": {
+											"value": "@{pipeline().Pipeline}/raw",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"exists"
+								],
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							}
+						},
+						{
+							"name": "If File Missing in Blob",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Check File in Blob Storage",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@not(activity('Check File in Blob Storage').output.exists)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Copy File SFTP to Blob",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "Store Current Filename",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "DelimitedTextSource",
+												"storeSettings": {
+													"type": "SftpReadSettings",
+													"recursive": true,
+													"enablePartitionDiscovery": false,
+													"disableChunking": false
+												},
+												"formatSettings": {
+													"type": "DelimitedTextReadSettings"
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_Ospitek_SFTP_copy",
+												"type": "DatasetReference",
+												"parameters": {
+													"remote_directory": {
+														"value": "@variables('sftp_remote_directory')",
+														"type": "Expression"
+													},
+													"filename": {
+														"value": "@item().name",
+														"type": "Expression"
+													},
+													"sftp_host": {
+														"value": "@variables('sftp_host')",
+														"type": "Expression"
+													},
+													"sftp_user_name": {
+														"value": "@variables('sftp_user_name')",
+														"type": "Expression"
+													},
+													"sftp_private_key": {
+														"value": "@variables('sftp_private_key')",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_Ospitek_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"path": {
+														"value": "@{pipeline().Pipeline}/raw",
+														"type": "Expression"
+													},
+													"file": "@item().name",
+													"container": {
+														"value": "@variables('tgt_container')",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "Store Current Filename",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "echo_filename",
+											"value": "@item().name"
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			}
+		],
+		"concurrency": 1,
+		"parameters": {
+			"LastNFiles": {
+				"type": "int",
+				"defaultValue": 1
+			}
+		},
+		"variables": {
+			"look_back_period": {
+				"type": "Integer"
+			},
+			"sftp_remote_directory": {
+				"type": "String",
+				"defaultValue": "/sftp.orthori.view2.ospitek.com"
+			},
+			"sftp_host": {
+				"type": "String",
+				"defaultValue": "sftp.orthori.view2.ospitek.com"
+			},
+			"sftp_user_name": {
+				"type": "String",
+				"defaultValue": "orthori"
+			},
+			"sftp_private_key": {
+				"type": "String",
+				"defaultValue": "sec-ospitek-sftp-priv-key"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "ospitek"
+			},
+			"echo_filename": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_Ospitek"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,82 @@
+{
+    "name": "PL_Combine_Values_From_JSON",
+    "properties": {
+        "activities": [
+            {
+                "name": "For Every JSON Object",
+                "type": "ForEach",
+                "dependsOn": [],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@pipeline().parameters.json_array",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "Append Column Value",
+                            "type": "AppendVariable",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "variableName": "combied_value_array",
+                                "value": {
+                                    "value": "@string(item()[pipeline().parameters.column])",
+                                    "type": "Expression"
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Set Return Values",
+                "type": "SetVariable",
+                "dependsOn": [
+                    {
+                        "activity": "For Every JSON Object",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "variableName": "pipelineReturnValue",
+                    "value": [
+                        {
+                            "key": "values",
+                            "value": {
+                                "type": "Expression",
+                                "content": "@join(variables('combied_value_array'),',')"
+                            }
+                        }
+                    ],
+                    "setSystemVariable": true
+                }
+            }
+        ],
+        "parameters": {
+            "json_array": {
+                "type": "array"
+            },
+            "column": {
+                "type": "string"
+            }
+        },
+        "variables": {
+            "combied_value_array": {
+                "type": "Array"
+            }
+        },
+        "folder": {
+            "name": "Job_SageIntacct"
+        },
+        "annotations": []
+    }
+}

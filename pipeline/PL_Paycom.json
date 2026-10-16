@@ -1,0 +1,352 @@
+{
+	"name": "PL_Paycom",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetFilesFromSFTP",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set today date yyyyMMdd",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_Paycom_SFTP_list",
+						"type": "DatasetReference",
+						"parameters": {
+							"remote_directory": "Outbound"
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "SftpReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false,
+						"disableChunking": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "FilterTodaysFiles",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "GetFilesFromSFTP",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetFilesFromSFTP').output.childItems",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@startsWith(item().name, variables('todayDate'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "CopyFilteredFiles",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "IfTodaysFilesExist",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('FilterTodaysFiles').output.Value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Copy data",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "SftpReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false,
+										"disableChunking": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_Paycom_SFTP_copy",
+									"type": "DatasetReference",
+									"parameters": {
+										"filename": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"remote_directory": "Outbound"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_Paycom_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"path": {
+											"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Sanitize CSV",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "CopyFilteredFiles",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": {
+						"value": "@concat('http://', pipeline().globalParameters.ENV_AZ_DBT_IP, ':8001/sanitize-blob-folder')",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"body": {
+						"value": "@json(concat('{\"account_url\":\"', pipeline().globalParameters.ENV_AZURE_BLOB_ACCOUNT_URL, '\",\"container\":\"', variables('tgt_container'), '\",\"path\":\"', activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path, '\",\"archive_path\":\"_sanitize_review/', first(split(activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path, '/')), '\",\"on_anomaly\":\"fail\"}'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": "PaycomStaging",
+						"tgt_schema": "dbo"
+					}
+				}
+			},
+			{
+				"name": "Set today date yyyyMMdd",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "todayDate",
+					"value": {
+						"value": "@formatDateTime(utcNow(), 'yyyyMMdd')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Snowflake copy",
+				"description": "Snowflake copy into table from @stage",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Sanitize CSV",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Paycom_Snowflake_FullLoad",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"snowflake_stage": "PAYCOM",
+						"snowflake_file_format": "FF_PAYCOM_CSV",
+						"config_table": "ADF_PAYCOM_TABLE_CONFIGS",
+						"tgt_schema": "PaycomStaging",
+						"data_folder_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "IfTodaysFilesExist",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "FilterTodaysFiles",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('FilterTodaysFiles').output.FilteredItemsCount, 0)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "ERROR - No file available",
+								"errorCode": "PAYCOM_NO_FILES"
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Proceed",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 1
+							}
+						}
+					]
+				}
+			}
+		],
+		"variables": {
+			"tgt_schema": {
+				"type": "String",
+				"defaultValue": "PaycomStaging"
+			},
+			"tgt_db": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "paycom"
+			},
+			"todayDate": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_Paycom"
+		},
+		"annotations": []
+	}
+}

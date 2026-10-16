@@ -1,0 +1,200 @@
+{
+	"name": "PL_Send_Output_To_Ascent",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get file names",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_MultiFile_CSV",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@concat(pipeline().parameters.main_pipeline_name, '/raw/', pipeline().parameters.current_date_output_folder)",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.container",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Iterate through each file and copy",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get file names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get file names').output.childItems",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Copy each file to SFTP",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "SftpWriteSettings",
+										"copyBehavior": "FlattenHierarchy",
+										"operationTimeout": "01:00:00",
+										"useTempFileRename": true
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_Ascent_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@concat(pipeline().parameters.main_pipeline_name, '/raw/', pipeline().parameters.current_date_output_folder)",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.container",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_Ascent_SFTP",
+									"type": "DatasetReference",
+									"parameters": {
+										"remote_directory": {
+											"value": "@pipeline().parameters.remote_directory",
+											"type": "Expression"
+										},
+										"folder": {
+											"value": "@{pipeline().parameters.remote_directory_data_folder}/@{pipeline().parameters.current_date_output_folder}/@{replace(item().name,'.csv',concat('_',pipeline().parameters.current_date_output_folder,'.csv'))}",
+											"type": "Expression"
+										},
+										"sftp_host": {
+											"value": "@pipeline().parameters.sftp_host",
+											"type": "Expression"
+										},
+										"sftp_user_name": {
+											"value": "@pipeline().parameters.sftp_user_name",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"container": {
+				"type": "string"
+			},
+			"current_date_output_folder": {
+				"type": "string"
+			},
+			"remote_directory": {
+				"type": "string"
+			},
+			"remote_directory_data_folder": {
+				"type": "string"
+			},
+			"sftp_host": {
+				"type": "string"
+			},
+			"sftp_user_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Job_Ascent"
+		},
+		"annotations": []
+	}
+}

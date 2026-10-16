@@ -1,0 +1,36 @@
+{
+	"name": "LS_REST_OData_Alt",
+	"properties": {
+		"description": "REST api alternative to OData Linked Service (needed to ensure data formats does not get changed by the buildin odata connector)",
+		"parameters": {
+			"service_url": {
+				"type": "string"
+			},
+			"auth_user": {
+				"type": "string"
+			},
+			"auth_password_sec": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "RestService",
+		"typeProperties": {
+			"url": "@{linkedService().service_url}",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "Basic",
+			"userName": "@{linkedService().auth_user}",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().auth_password_sec",
+					"type": "Expression"
+				}
+			}
+		}
+	}
+}

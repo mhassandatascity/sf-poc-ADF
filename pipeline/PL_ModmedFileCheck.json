@@ -1,0 +1,346 @@
+{
+	"name": "PL_ModmedFileCheck",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set_ExpectedFileName",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "expected_file_name",
+					"value": {
+						"value": "@concat('onsmd_', formatDateTime(convertTimeZone(addDays(utcNow(),-1),'UTC','Eastern Standard Time'),'yyyy-MM-dd'), '_enc', if(equals(pipeline().parameters.table_load_group,'Priority'), '_priority', ''), '.zip')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "WaitFor_File_Availability",
+				"description": "",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Set_ExpectedFileName",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(equals(variables('file_exists'), true), greater(int(variables('retry_counter')), pipeline().parameters.maxRetry))",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Check_S3File_Exists",
+							"type": "GetMetadata",
+							"dependsOn": [
+								{
+									"activity": "Update_Counter",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DS_S3_Binary",
+									"type": "DatasetReference",
+									"parameters": {
+										"sec_access_key": {
+											"value": "@variables('sec_access_key')",
+											"type": "Expression"
+										},
+										"sec_secret_access_key": {
+											"value": "@variables('sec_secret_access_key')",
+											"type": "Expression"
+										},
+										"bucket": {
+											"value": "@variables('src_bucket')",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@variables('src_path')",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@variables('expected_file_name')",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"exists"
+								],
+								"storeSettings": {
+									"type": "AmazonS3ReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							}
+						},
+						{
+							"name": "Set_FileExistsFlag",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Check_S3File_Exists",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "file_exists",
+								"value": {
+									"value": "@activity('Check_S3File_Exists').output.exists",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "If_FileNotFound_Wait15Min",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Set_FileExistsFlag",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(variables('file_exists'), false)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Wait_15Minutes",
+										"description": "Pause for 15 minutes before next check",
+										"type": "Wait",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"waitTimeInSeconds": 900
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Calculate_NewCounter",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "temp_counter",
+								"value": {
+									"value": "@string(add(int(variables('retry_counter')), 1))",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Update_Counter",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Calculate_NewCounter",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "retry_counter",
+								"value": {
+									"value": "@variables('temp_counter')",
+									"type": "Expression"
+								}
+							}
+						}
+					],
+					"timeout": "0.5:30:00"
+				}
+			},
+			{
+				"name": "Execute Modmed pipeline",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set pbiDatasetInputs",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "If_FileAvailabilityOrMaxRetries",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Modmed",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"table_load_group": {
+							"value": "@pipeline().parameters.table_load_group",
+							"type": "Expression"
+						},
+						"pbiDatasetInputs": {
+							"value": "@variables('staged_pbiDataset_inputs')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set pbiDatasetInputs",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "staged_pbiDataset_inputs",
+					"value": {
+						"value": "@if(greater(length(pipeline().parameters.pbiDatasetInputs), 0), pipeline().parameters.pbiDatasetInputs[0][pipeline().globalParameters.ENV_STAGE], json('[]'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "If_FileAvailabilityOrMaxRetries",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "WaitFor_File_Availability",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(equals(variables('file_exists'), true), lessOrEquals(int(variables('retry_counter')), pipeline().parameters.maxRetry))",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail_Pipeline_MaxRetriesExceeded",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@concat('File check failed after ', variables('retry_counter'), ' attempts. Expected file: ', variables('expected_file_name'), ' was not found in S3 bucket.')",
+									"type": "Expression"
+								},
+								"errorCode": "FileNotFoundAfterMaxRetries"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"table_load_group": {
+				"type": "string"
+			},
+			"pbiDatasetInputs": {
+				"type": "array",
+				"defaultValue": []
+			},
+			"maxRetry": {
+				"type": "int",
+				"defaultValue": 5
+			}
+		},
+		"variables": {
+			"expected_file_name": {
+				"type": "String"
+			},
+			"file_exists": {
+				"type": "Boolean",
+				"defaultValue": false
+			},
+			"sec_access_key": {
+				"type": "String",
+				"defaultValue": "sec-modmed-s3-access-key"
+			},
+			"sec_secret_access_key": {
+				"type": "String",
+				"defaultValue": "sec-modmed-s3-secret-key"
+			},
+			"src_bucket": {
+				"type": "String",
+				"defaultValue": "enterprise-datasets"
+			},
+			"src_path": {
+				"type": "String",
+				"defaultValue": "onsmd"
+			},
+			"staged_pbiDataset_inputs": {
+				"type": "Array",
+				"defaultValue": []
+			},
+			"retry_counter": {
+				"type": "String",
+				"defaultValue": "1"
+			},
+			"temp_counter": {
+				"type": "String",
+				"defaultValue": "0"
+			}
+		},
+		"folder": {
+			"name": "Job_Modmed"
+		},
+		"annotations": []
+	}
+}

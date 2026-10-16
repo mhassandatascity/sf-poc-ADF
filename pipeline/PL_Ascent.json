@@ -1,0 +1,318 @@
+{
+	"name": "PL_Ascent",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get SFTP Host",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-ascent-sftp-server?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get SFTP User Name",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/sec-ascent-sftp-username?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get scripts and run",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set current_date_output_folder",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get SFTP Host",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get SFTP User Name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Get_And_Run_Scripts",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"container": {
+							"value": "@variables('blob_container_name')",
+							"type": "Expression"
+						},
+						"scripts_folder": {
+							"value": "@variables('scripts_folder_name')",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"current_date_output_folder": {
+							"value": "@variables('current_date_output_folder')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Send results to Ascent",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Get scripts and run",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Send_Output_To_Ascent",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"container": {
+							"value": "@variables('blob_container_name')",
+							"type": "Expression"
+						},
+						"current_date_output_folder": {
+							"value": "@variables('current_date_output_folder')",
+							"type": "Expression"
+						},
+						"remote_directory": {
+							"value": "@variables('remote_directory')",
+							"type": "Expression"
+						},
+						"remote_directory_data_folder": {
+							"value": "@variables('remote_directory_data_folder')",
+							"type": "Expression"
+						},
+						"sftp_host": {
+							"value": "@activity('Get SFTP Host').output.value",
+							"type": "Expression"
+						},
+						"sftp_user_name": {
+							"value": "@activity('Get SFTP User Name').output.value",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set current_date_output_folder",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "current_date_output_folder",
+					"value": {
+						"value": "@formatDateTime(convertTimeZone(utcnow(),'UTC','Eastern Standard Time'), 'yyyyMMddHHmm')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Mail Body",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Send results to Ascent",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "mail_body",
+					"value": {
+						"value": "@concat('<p>Hi Team,</p><p>The results of each SQL query are saved as CSV files and have been successfully sent to the Ascent team. These CSV files can be located in the folder: <span style=font-weight:bold>',concat('<span style=font-weight:bold;>/s3-bucket/spire-abspmg/DailyData_spire/', variables('current_date_output_folder')),'</span></p>','<p style=font-weight:bold>Note: This email is automatically generated.</p>')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Send Alert Mail",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set Mail Body",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Send_Alert_Mail",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"from": {
+							"value": "@variables('from_mail_id')",
+							"type": "Expression"
+						},
+						"body": {
+							"value": "@variables('mail_body')",
+							"type": "Expression"
+						},
+						"to": {
+							"value": "@createArray(pipeline().globalParameters.ENV_MAIL_CONFIG_DEVELOPERS, 'armssupport@ascenthealthcare.com')",
+							"type": "Expression"
+						},
+						"cc": {
+							"value": "@createArray('spiredata@spireortho.com')",
+							"type": "Expression"
+						},
+						"bcc": {
+							"value": "@createArray('')",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"subject": {
+							"value": "Ascent-Spire-ModMed data",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"variables": {
+			"blob_container_name": {
+				"type": "String",
+				"defaultValue": "ascent"
+			},
+			"scripts_folder_name": {
+				"type": "String",
+				"defaultValue": "scripts_snf"
+			},
+			"current_date_output_folder": {
+				"type": "String"
+			},
+			"remote_directory": {
+				"type": "String",
+				"defaultValue": "/s3-bucket/spire-abspmg"
+			},
+			"remote_directory_scripts_folder": {
+				"type": "String",
+				"defaultValue": "SQL Query"
+			},
+			"remote_directory_data_folder": {
+				"type": "String",
+				"defaultValue": "DailyData_spire"
+			},
+			"from_mail_id": {
+				"type": "String",
+				"defaultValue": "spiredata@spireortho.com"
+			},
+			"mail_body": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_Ascent"
+		},
+		"annotations": []
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

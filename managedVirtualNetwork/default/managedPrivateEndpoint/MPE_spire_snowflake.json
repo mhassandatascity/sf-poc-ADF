@@ -1,0 +1,12 @@
+{
+	"name": "MPE_spire_snowflake",
+	"properties": {
+		"privateLinkResourceId": "/subscriptions/4a884470-d925-4f22-bcf5-5810e957c526/resourceGroups/azeastus2prodshard2-privatelink/providers/Microsoft.Network/privateLinkServices/sf-pvlinksvc-azeastus2prodshard2",
+		"groupId": "",
+		"fqdns": [
+			"uxa51963.east-us-2.privatelink.snowflakecomputing.com",
+			"spireortho-aaas.privatelink.snowflakecomputing.com",
+			"ocsp.uxa51963.east-us-2.privatelink.snowflakecomputing.com"
+		]
+	}
+}

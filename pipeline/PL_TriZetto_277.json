@@ -1,0 +1,1011 @@
+{
+	"name": "PL_TriZetto_277",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute PL_Output_Paths",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": "X12_277",
+						"tgt_schema": ""
+					}
+				}
+			},
+			{
+				"name": "List 4L81 SFTP Files",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_TriZetto_4L81_SFTP_Folder",
+						"type": "DatasetReference",
+						"parameters": {
+							"remote_directory": {
+								"value": "@variables('src_folder')",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "SftpReadSettings",
+						"recursive": false,
+						"enablePartitionDiscovery": false,
+						"disableChunking": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Filter 4L81 Files",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "List 4L81 SFTP Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('List 4L81 SFTP Files').output.childItems",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@and(\n  equals(item().type, 'File'),\n  greaterOrEquals(\n    split(item().name, '.')[1],\n    formatDateTime(addDays(utcnow(), mul(-1, pipeline().parameters.lookback_days)), 'yyyyMMdd')\n  )\n)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Copy 4L81 Files To Blob",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Filter 4L81 Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Filter 4L81 Files').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Check 4L81 File In Ledger",
+							"type": "GetMetadata",
+							"dependsOn": [],
+							"policy": {
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DS_AzureBlob_Spire_Singlefile_Binary",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@concat(variables('ledger_path'), '/4L81')",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"exists"
+								],
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							}
+						},
+						{
+							"name": "If 4L81 File Not Ingested",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Check 4L81 File In Ledger",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@not(activity('Check 4L81 File In Ledger').output.exists)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Copy 4L81 File",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 1,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "file",
+												"value": {
+													"value": "@item().name",
+													"type": "Expression"
+												}
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "BinarySource",
+												"storeSettings": {
+													"type": "SftpReadSettings",
+													"recursive": false,
+													"disableChunking": false
+												},
+												"formatSettings": {
+													"type": "BinaryReadSettings"
+												}
+											},
+											"sink": {
+												"type": "BinarySink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												}
+											},
+											"enableStaging": false
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_TriZetto_4L81_SFTP_Binary",
+												"type": "DatasetReference",
+												"parameters": {
+													"remote_directory": {
+														"value": "@variables('src_folder')",
+														"type": "Expression"
+													},
+													"filename": {
+														"value": "@item().name",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_Singlefile_Binary",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@variables('tgt_container')",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@concat(activity('Execute PL_Output_Paths').output.pipelineReturnValue.bin_output_path, '/4L81')",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().name",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "Append 4L81 Ingested File",
+										"type": "AppendVariable",
+										"dependsOn": [
+											{
+												"activity": "Copy 4L81 File",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "files_ingested_4l81",
+											"value": {
+												"value": "@item().name",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "List 5L9M SFTP Files",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_TriZetto_5L9M_SFTP_Folder",
+						"type": "DatasetReference",
+						"parameters": {
+							"remote_directory": {
+								"value": "@variables('src_folder')",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "SftpReadSettings",
+						"recursive": false,
+						"enablePartitionDiscovery": false,
+						"disableChunking": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Filter 5L9M Files",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "List 5L9M SFTP Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('List 5L9M SFTP Files').output.childItems",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@and(\n  equals(item().type, 'File'),\n  greaterOrEquals(\n    split(item().name, '.')[1],\n    formatDateTime(addDays(utcnow(), mul(-1, pipeline().parameters.lookback_days)), 'yyyyMMdd')\n  )\n)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Copy 5L9M Files To Blob",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Filter 5L9M Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Filter 5L9M Files').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Check 5L9M File In Ledger",
+							"type": "GetMetadata",
+							"dependsOn": [],
+							"policy": {
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DS_AzureBlob_Spire_Singlefile_Binary",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@concat(variables('ledger_path'), '/5L9M')",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"exists"
+								],
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							}
+						},
+						{
+							"name": "If 5L9M File Not Ingested",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Check 5L9M File In Ledger",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@not(activity('Check 5L9M File In Ledger').output.exists)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Copy 5L9M File",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 1,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "file",
+												"value": {
+													"value": "@item().name",
+													"type": "Expression"
+												}
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "BinarySource",
+												"storeSettings": {
+													"type": "SftpReadSettings",
+													"recursive": false,
+													"disableChunking": false
+												},
+												"formatSettings": {
+													"type": "BinaryReadSettings"
+												}
+											},
+											"sink": {
+												"type": "BinarySink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												}
+											},
+											"enableStaging": false
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_TriZetto_5L9M_SFTP_Binary",
+												"type": "DatasetReference",
+												"parameters": {
+													"remote_directory": {
+														"value": "@variables('src_folder')",
+														"type": "Expression"
+													},
+													"filename": {
+														"value": "@item().name",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_Singlefile_Binary",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@variables('tgt_container')",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@concat(activity('Execute PL_Output_Paths').output.pipelineReturnValue.bin_output_path, '/5L9M')",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().name",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "Append 5L9M Ingested File",
+										"type": "AppendVariable",
+										"dependsOn": [
+											{
+												"activity": "Copy 5L9M File",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "files_ingested_5l9m",
+											"value": {
+												"value": "@item().name",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If Any New Files",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Copy 4L81 Files To Blob",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Copy 5L9M Files To Blob",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(add(length(variables('files_ingested_4l81')), length(variables('files_ingested_5l9m'))), 0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set Command",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "command",
+								"value": {
+									"value": "/bin/bash -c \" \\\nln -s /datadisk $(pwd)/datadisk && \\\npython3 x12_277_convert.py \\\n    --keyvault_url=@{pipeline().globalParameters.ENV_KV_BASE_URL}/ \\\n    --sec_edifabric_serial_name=@{variables('sec_edifabric_serial')} \\\n    --sec_edifabric_token_name=@{variables('sec_edifabric_token')} \\\n    --blob_url=@{pipeline().globalParameters.ENV_AZURE_BLOB_ACCOUNT_URL}/ \\\n    --blob_container=@{variables('tgt_container')} \\\n    --blob_input_path=@{activity('Execute PL_Output_Paths').output.pipelineReturnValue.bin_output_path} \\\n    --blob_output_path=@{activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path}\"",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Execute PL_Batch_Execute_Scripts",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Set Command",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_Batch_Execute_Scripts",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"python_script_path": {
+										"value": "@variables('convert_script_path')",
+										"type": "Expression"
+									},
+									"command": {
+										"value": "@variables('command')",
+										"type": "Expression"
+									},
+									"main_pipeline_name": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"main_pipeline_run_id": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Load Data Into Snowflake",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Execute PL_Batch_Execute_Scripts",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_Spire",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"warehouse": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+										"type": "Expression"
+									},
+									"database": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+										"type": "Expression"
+									},
+									"user_name": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+										"type": "Expression"
+									},
+									"role": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+										"type": "Expression"
+									},
+									"account_name": "spireortho-aaas.privatelink"
+								}
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.X12_277_Interchanges FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.TRIZETTO_277/',activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path,'X12_277_Interchanges.ndjson FILE_FORMAT = (TYPE = JSON) ON_ERROR = ''ABORT_STATEMENT'' MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;'\n)",
+											"type": "Expression"
+										}
+									},
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.X12_277_Groups FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.TRIZETTO_277/',activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path,'X12_277_Groups.ndjson FILE_FORMAT = (TYPE = JSON) ON_ERROR = ''ABORT_STATEMENT'' MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;'\n)",
+											"type": "Expression"
+										}
+									},
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.X12_277_Transactions FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.TRIZETTO_277/',activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path,'X12_277_Transactions.ndjson FILE_FORMAT = (TYPE = JSON) ON_ERROR = ''ABORT_STATEMENT'' MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;'\n)",
+											"type": "Expression"
+										}
+									},
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.X12_277_Receiver_Statuses FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.TRIZETTO_277/',activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path,'X12_277_Receiver_Statuses.ndjson FILE_FORMAT = (TYPE = JSON) ON_ERROR = ''ABORT_STATEMENT'' MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;'\n)",
+											"type": "Expression"
+										}
+									},
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.X12_277_Billing_Providers FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.TRIZETTO_277/',activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path,'X12_277_Billing_Providers.ndjson FILE_FORMAT = (TYPE = JSON) ON_ERROR = ''ABORT_STATEMENT'' MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;'\n)",
+											"type": "Expression"
+										}
+									},
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.X12_277_Billing_Provider_Statuses FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.TRIZETTO_277/',activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path,'X12_277_Billing_Provider_Statuses.ndjson FILE_FORMAT = (TYPE = JSON) ON_ERROR = ''ABORT_STATEMENT'' MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;'\n)",
+											"type": "Expression"
+										}
+									},
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.X12_277_Patients FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.TRIZETTO_277/',activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path,'X12_277_Patients.ndjson FILE_FORMAT = (TYPE = JSON) ON_ERROR = ''ABORT_STATEMENT'' MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;'\n)",
+											"type": "Expression"
+										}
+									},
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.X12_277_Claims FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.TRIZETTO_277/',activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path,'X12_277_Claims.ndjson FILE_FORMAT = (TYPE = JSON) ON_ERROR = ''ABORT_STATEMENT'' MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;'\n)",
+											"type": "Expression"
+										}
+									},
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.X12_277_Claim_Statuses FROM @',toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.',variables('snowflake_schema'),'.TRIZETTO_277/',activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path,'X12_277_Claim_Statuses.ndjson FILE_FORMAT = (TYPE = JSON) ON_ERROR = ''ABORT_STATEMENT'' MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;'\n)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Mark 4L81 Files As Ingested",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "If Any New Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('files_ingested_4l81')",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Copy 4L81 File To Ledger",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "file",
+									"value": {
+										"value": "@item()",
+										"type": "Expression"
+									}
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": false,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_Singlefile_Binary",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@concat(activity('Execute PL_Output_Paths').output.pipelineReturnValue.bin_output_path, '/4L81')",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item()",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_Singlefile_Binary",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@concat(variables('ledger_path'), '/4L81')",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item()",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Mark 5L9M Files As Ingested",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "If Any New Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('files_ingested_5l9m')",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Copy 5L9M File To Ledger",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "file",
+									"value": {
+										"value": "@item()",
+										"type": "Expression"
+									}
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": false,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_Singlefile_Binary",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@concat(activity('Execute PL_Output_Paths').output.pipelineReturnValue.bin_output_path, '/5L9M')",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item()",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_Singlefile_Binary",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@concat(variables('ledger_path'), '/5L9M')",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@item()",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"concurrency": 1,
+		"parameters": {
+			"lookback_days": {
+				"type": "int",
+				"defaultValue": 7
+			}
+		},
+		"variables": {
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "trizetto"
+			},
+			"src_folder": {
+				"type": "String",
+				"defaultValue": "/277"
+			},
+			"convert_script_path": {
+				"type": "String",
+				"defaultValue": "utility/PL_TriZetto_277/x12-277-parser"
+			},
+			"ledger_path": {
+				"type": "String",
+				"defaultValue": "PL_TriZetto_277/ingested"
+			},
+			"snowflake_schema": {
+				"type": "String",
+				"defaultValue": "X12"
+			},
+			"sec_edifabric_serial": {
+				"type": "String",
+				"defaultValue": "sec-edifabric-serial"
+			},
+			"sec_edifabric_token": {
+				"type": "String",
+				"defaultValue": "sec-edifabric-token"
+			},
+			"command": {
+				"type": "String"
+			},
+			"files_ingested_4l81": {
+				"type": "Array"
+			},
+			"files_ingested_5l9m": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "Job_TriZetto"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,24 @@
+{
+	"name": "DS_SQLServer_Amkai",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SQLServer_Amkai",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"schema": {
+				"type": "string"
+			},
+			"table": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": "@dataset().schema",
+			"table": "@dataset().table"
+		}
+	}
+}

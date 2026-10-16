@@ -1,0 +1,7 @@
+{
+	"name": "MPE_azure_blob_storage",
+	"properties": {
+		"privateLinkResourceId": "/subscriptions/be059275-c554-4960-aa2f-74c2d286f11e/resourceGroups/SpireADF_Dev/providers/Microsoft.Storage/storageAccounts/stseadeveus2",
+		"groupId": "blob"
+	}
+}

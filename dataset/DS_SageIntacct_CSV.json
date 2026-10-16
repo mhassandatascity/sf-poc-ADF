@@ -1,0 +1,25 @@
+{
+	"name": "DS_SageIntacct_CSV",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SageIntacct",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "SageIntacct"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "HttpServerLocation"
+			},
+			"columnDelimiter": ",",
+			"rowDelimiter": "\n",
+			"escapeChar": "\"",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}

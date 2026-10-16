@@ -1,0 +1,231 @@
+{
+	"name": "PL_Get_Indexes",
+	"properties": {
+		"activities": [
+			{
+				"name": "Index 0",
+				"type": "Switch",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"on": {
+						"value": "@split(string(pipeline().parameters.PARTICIPANTS[0]['actor']['reference']) , '/')[9]",
+						"type": "Expression"
+					},
+					"cases": [
+						{
+							"value": "Patient",
+							"activities": [
+								{
+									"name": "Set Patient 0",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "PATIENT_INDEX",
+										"value": 0
+									}
+								}
+							]
+						},
+						{
+							"value": "Practitioner",
+							"activities": [
+								{
+									"name": "Set Practitioner 0",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "STAFF_INDEX",
+										"value": 0
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Index 1",
+				"type": "Switch",
+				"dependsOn": [
+					{
+						"activity": "Index 0",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"on": {
+						"value": "@split(string(pipeline().parameters.PARTICIPANTS[1]['actor']['reference']) , '/')[9]",
+						"type": "Expression"
+					},
+					"cases": [
+						{
+							"value": "Patient",
+							"activities": [
+								{
+									"name": "Set Patient 1",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "PATIENT_INDEX",
+										"value": 1
+									}
+								}
+							]
+						},
+						{
+							"value": "Practitioner",
+							"activities": [
+								{
+									"name": "Set Practitioner 1",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "STAFF_INDEX",
+										"value": 1
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Index 2",
+				"type": "Switch",
+				"dependsOn": [
+					{
+						"activity": "Index 1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"on": {
+						"value": "@split(string(pipeline().parameters.PARTICIPANTS[2]['actor']['reference']) , '/')[9]",
+						"type": "Expression"
+					},
+					"cases": [
+						{
+							"value": "Patient",
+							"activities": [
+								{
+									"name": "Set Patient 2",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "PATIENT_INDEX",
+										"value": 2
+									}
+								}
+							]
+						},
+						{
+							"value": "Practitioner",
+							"activities": [
+								{
+									"name": "Set Practitioner 2",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "STAFF_INDEX",
+										"value": 2
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Return Indexes",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Index 2",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "PATIENT_INDEX",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('PATIENT_INDEX')"
+							}
+						},
+						{
+							"key": "STAFF_INDEX",
+							"value": {
+								"type": "Expression",
+								"content": "@variables('STAFF_INDEX')"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			}
+		],
+		"parameters": {
+			"PARTICIPANTS": {
+				"type": "array"
+			}
+		},
+		"variables": {
+			"PATIENT_INDEX": {
+				"type": "Integer"
+			},
+			"STAFF_INDEX": {
+				"type": "Integer"
+			}
+		},
+		"folder": {
+			"name": "Job_RPA"
+		},
+		"annotations": []
+	}
+}

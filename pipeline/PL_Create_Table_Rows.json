@@ -1,0 +1,88 @@
+{
+	"name": "PL_Create_Table_Rows",
+	"properties": {
+		"activities": [
+			{
+				"name": "Create Row",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.columns",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Append Column Value",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "row",
+								"value": {
+									"value": "@{pipeline().parameters.row[item()]}",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Set Table Row",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Create Row",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "row",
+							"value": {
+								"type": "Expression",
+								"content": "@concat('<tr><td style=border-width:1px;border-style:solid;border-color:black;border-collapse:collapse;text-align:center;width:200px;height:30px;>',join(variables('row'),'</td><td style=border-width:1px;border-style:solid;border-color:black;border-collapse:collapse;text-align:center;width:200px;height:30px;>'),'</td></tr>')"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			}
+		],
+		"parameters": {
+			"columns": {
+				"type": "array"
+			},
+			"row": {
+				"type": "object"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"row": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "Shared_Alerting_Pipelines"
+		},
+		"annotations": []
+	}
+}

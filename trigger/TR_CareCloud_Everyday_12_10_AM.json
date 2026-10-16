@@ -1,0 +1,38 @@
+{
+	"name": "TR_CareCloud_Everyday_12_10_AM",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_CareCloud",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"days_delay": 10,
+					"replication_db_sp": "job_INCREMENTAL_UPDATE",
+					"table_load_group_ODS": "Priority",
+					"table_load_group_OLAP": "Priority"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Day",
+				"interval": 1,
+				"startTime": "2023-11-26T22:30:00",
+				"timeZone": "Eastern Standard Time",
+				"schedule": {
+					"minutes": [
+						10
+					],
+					"hours": [
+						0
+					]
+				}
+			}
+		}
+	}
+}

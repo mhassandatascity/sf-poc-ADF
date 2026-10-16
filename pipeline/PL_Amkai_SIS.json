@@ -1,0 +1,234 @@
+{
+	"name": "PL_Amkai_SIS",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute PL_AzureBlob_Data_Fetch_XLSX_To_CSV",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_AzureBlob_Data_Fetch_XLSX_To_CSV",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"src_container": {
+							"value": "@variables('src_container')",
+							"type": "Expression"
+						},
+						"src_container_folder": {
+							"value": "@variables('src_filedrop_folder')",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"excel_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.excel_output_path",
+							"type": "Expression"
+						},
+						"data_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"source_key": {
+							"value": "@variables('source_key')",
+							"type": "Expression"
+						},
+						"config_table": {
+							"value": "@variables('xlsx_config_table')",
+							"type": "Expression"
+						},
+						"config_database": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_META')",
+							"type": "Expression"
+						},
+						"table_load_group": {
+							"value": "@pipeline().parameters.table_load_group",
+							"type": "Expression"
+						},
+						"config_table_schema": {
+							"value": "@variables('config_table_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Execute PL_AzureBlob_Data_Fetch_CSV_To_CSV",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_AzureBlob_Data_Fetch_CSV_To_CSV",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"src_container": {
+							"value": "@variables('src_container')",
+							"type": "Expression"
+						},
+						"src_container_folder": {
+							"value": "@variables('src_filedrop_folder')",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"csv_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.csv_output_path",
+							"type": "Expression"
+						},
+						"data_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"source_key": {
+							"value": "@variables('source_key')",
+							"type": "Expression"
+						},
+						"table_load_group": {
+							"value": "@pipeline().parameters.table_load_group",
+							"type": "Expression"
+						},
+						"config_table": {
+							"value": "@variables('csv_config_table')",
+							"type": "Expression"
+						},
+						"config_database": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_META')",
+							"type": "Expression"
+						},
+						"config_table_schema": {
+							"value": "@variables('config_table_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"table_load_group": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "amkai-sis"
+			},
+			"tgt_db": {
+				"type": "String",
+				"defaultValue": "SISStaging"
+			},
+			"tgt_schema": {
+				"type": "String",
+				"defaultValue": "etl"
+			},
+			"src_container": {
+				"type": "String",
+				"defaultValue": "amkai-sis"
+			},
+			"src_filedrop_folder": {
+				"type": "String",
+				"defaultValue": "filedrops"
+			},
+			"source_key": {
+				"type": "String",
+				"defaultValue": "6"
+			},
+			"xlsx_config_table": {
+				"type": "String",
+				"defaultValue": "adf_xlsx_source_table_configs"
+			},
+			"config_database": {
+				"type": "String",
+				"defaultValue": "etl_metadata"
+			},
+			"config_table_schema": {
+				"type": "String",
+				"defaultValue": "adf"
+			},
+			"csv_config_table": {
+				"type": "String",
+				"defaultValue": "adf_csv_source_table_configs"
+			}
+		},
+		"folder": {
+			"name": "Job_AmkaiSIS"
+		},
+		"annotations": []
+	}
+}

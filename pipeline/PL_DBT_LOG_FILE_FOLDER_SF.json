@@ -1,0 +1,69 @@
+{
+	"name": "PL_DBT_LOG_FILE_FOLDER_SF",
+	"properties": {
+		"activities": [
+			{
+				"name": "Insert_to_SF",
+				"description": "Inserts pipeline name and data path to Snowflake table.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "@concat(\n  'INSERT INTO ', \n  pipeline().globalParameters.ENV_STAGE, \n  '_meta.etl_metadata.adf_folder_log (PIPELINE_NAME, FOLDERDATE, RUNTIMESTAMP) VALUES (''', \n  pipeline().parameters.PipelineName, \n  ''', ''', \n  pipeline().parameters.FolderDate, \n  ''', ', \n  'CURRENT_TIMESTAMP);'\n)",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_Snowflake_Spire",
+						"type": "DatasetReference",
+						"parameters": {
+							"warehouse": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+								"type": "Expression"
+							},
+							"database": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_META')",
+								"type": "Expression"
+							},
+							"user_name": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+								"type": "Expression"
+							},
+							"role": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"PipelineName": {
+				"type": "String",
+				"defaultValue": "@pipeline().Pipeline"
+			},
+			"FolderDate": {
+				"type": "String",
+				"defaultValue": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path"
+			}
+		},
+		"folder": {
+			"name": "Shared_DBT_Pipelines"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,460 @@
+{
+	"name": "PL_HST",
+	"properties": {
+		"description": "Loads HSTPathways daily _NNN-chunked files from S3 external stage @AWS_S3_HSTPATHWAYS into DEV_RAW.HSTPATHWAYSSTAGING tables. Source files are headerless CSV. Prereq: 171 target tables created via hsthighway/hst_table_column_names_all.sql (16 Visit-domain) + hsthighway/hst_table_column_names_rest.sql (155 others); stage and FF_HSTPATHWAYS_CSV file format (SKIP_HEADER=0) already provisioned in Snowflake. All columns are VARCHAR until HSTPathways confirms unload column order.",
+		"activities": [
+			{
+				"name": "Set schema path",
+				"description": "<database_name>.<schema_name>",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "set_schema_path",
+					"value": {
+						"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE),'_RAW.HSTPATHWAYSSTAGING')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set stage path",
+				"description": "fully-qualified stage path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set schema path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "set_stage_path",
+					"value": {
+						"value": "@concat(variables('set_schema_path'),'.AWS_S3_HSTPATHWAYS')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set file format path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set schema path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "set_file_format_path",
+					"value": {
+						"value": "@concat(variables('set_schema_path'),'.FF_HSTPATHWAYS_CSV')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set today date folder",
+				"description": "yyyy/MM/dd folder under unload/fullload/",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "today_date_folder",
+					"value": {
+						"value": "@formatDateTime(utcNow(),'yyyy/MM/dd')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "ForEachTable",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Set stage path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set file format path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set today date folder",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('hst_tables')",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 8,
+					"activities": [
+						{
+							"name": "TruncateTable",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_Spire",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"warehouse": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+										"type": "Expression"
+									},
+									"database": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+										"type": "Expression"
+									},
+									"user_name": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+										"type": "Expression"
+									},
+									"role": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+										"type": "Expression"
+									},
+									"account_name": "spireortho-aaas.privatelink"
+								}
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat('TRUNCATE TABLE ', variables('set_schema_path'), '.', toUpper(item()))",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "ExecuteSnowflakeCopy",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "TruncateTable",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_Spire",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"warehouse": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+										"type": "Expression"
+									},
+									"database": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+										"type": "Expression"
+									},
+									"user_name": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+										"type": "Expression"
+									},
+									"role": {
+										"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+										"type": "Expression"
+									},
+									"account_name": "spireortho-aaas.privatelink"
+								}
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat(\n  'COPY INTO ', variables('set_schema_path'), '.', toUpper(item()),\n  ' FROM @', variables('set_stage_path'),\n  ' PATTERN=''unload/fullload/', variables('today_date_folder'), '/', item(), '_[0-9]{3}$''',\n  ' FILE_FORMAT=', variables('set_file_format_path'), ';'\n)",
+											"type": "Expression"
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "If Errors",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "ExecuteSnowflakeCopy",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@or(contains(string(activity('ExecuteSnowflakeCopy').output.resultSets[0].rows), '\\\"status\\\":\\\"FAILED\\\"'), contains(string(activity('ExecuteSnowflakeCopy').output.resultSets[0].rows), '\\\"errors_seen\\\":\\\"1\\\"'))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Fail1",
+										"type": "Fail",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"message": {
+												"value": "@concat('HST Snowflake load failed - \n    File loaded: ', activity('ExecuteSnowflakeCopy').output.resultSets[0].rows[0]['file'], ',\n    Target table: ', variables('set_schema_path'), '.', toUpper(item()) ,'\n    Rows loaded: ', activity('ExecuteSnowflakeCopy').output.resultSets[0].rows[0]['rows_loaded'], ', \n    Errors seen: ', activity('ExecuteSnowflakeCopy').output.resultSets[0].rows[0]['errors_seen']\n)",
+												"type": "Expression"
+											},
+											"errorCode": "SNOWFLAKE_LOAD_VALIDATION_FAILED"
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			}
+		],
+		"variables": {
+			"set_schema_path": {
+				"type": "String"
+			},
+			"set_stage_path": {
+				"type": "String"
+			},
+			"set_file_format_path": {
+				"type": "String"
+			},
+			"today_date_folder": {
+				"type": "String"
+			},
+			"hst_tables": {
+				"type": "Array",
+				"defaultValue": [
+					"t_account",
+					"t_AccountTran",
+					"t_admitsource",
+					"t_admittype",
+					"t_AnesDataTransfer",
+					"t_anesentity",
+					"t_AnesthesiaType",
+					"t_AnesthesiaTypeCategory",
+					"t_Appointment",
+					"t_ASAStatus",
+					"t_BilledService",
+					"t_BilledServiceAdj",
+					"t_BilledServiceICD",
+					"t_BilledServicePayRemark",
+					"t_BillingRule",
+					"t_BlockTemplate",
+					"t_cancelappointment",
+					"t_cancelreason",
+					"t_CaseSummary",
+					"t_centeraddress",
+					"t_CenterAdmin",
+					"t_centerblackout",
+					"t_CenterConfiguration",
+					"t_ClaimDenialReason",
+					"t_ClaimType",
+					"t_contract",
+					"t_ContractCarveOuts",
+					"t_CountSheetItems",
+					"t_County",
+					"t_cptcenterfee",
+					"t_CPTCode",
+					"t_CPTMedicareFee",
+					"t_CredentialType",
+					"t_datalake_patientdoc",
+					"t_DelayReason",
+					"t_Disposition",
+					"t_ECSVendor",
+					"t_EHR_AnesthesiaHistory",
+					"t_ehr_chart",
+					"t_ehr_eventtime",
+					"t_EHR_HeightWeightBMI",
+					"t_ehr_moduletemplate",
+					"t_ehr_workflow",
+					"t_ehr_workflowtemplate",
+					"t_EHR_WoundClass",
+					"t_employee",
+					"t_EmployeeCredential",
+					"t_employeedept",
+					"t_EmployeeType",
+					"t_employmentstatus",
+					"t_encountertypedefinition",
+					"t_eobpaymentremarks",
+					"t_eobprovideradjreasoncode",
+					"t_eobreasoncode",
+					"t_erapatient",
+					"t_erapatientclaimadj",
+					"t_erapatientclaimremark",
+					"t_erapayment",
+					"t_eraprovideradj",
+					"t_eraprovideradjapplied",
+					"t_eraselfpayheader",
+					"t_eraselfpayment",
+					"t_eraselfpayvisit",
+					"t_eraserviceline",
+					"t_eraservicelineadj",
+					"t_eraservicelineremark",
+					"t_EstimatedIndirectCost",
+					"t_ethniccode",
+					"t_FeeGroup",
+					"t_FinancialClass",
+					"t_FollowUp",
+					"t_FunctionCategory",
+					"t_ICDDiag",
+					"t_ImplantType",
+					"t_IndicatorCode",
+					"t_IndicatorType",
+					"t_InvConfiguration",
+					"t_InventoryDept",
+					"t_InventoryLocation",
+					"t_invtran",
+					"t_InvTranCode",
+					"t_ItemCategory",
+					"t_ItemEquipment",
+					"t_ItemLocation",
+					"t_ItemMaster",
+					"t_ItemUsage",
+					"t_ItemVendor",
+					"t_languagecode",
+					"t_lineitemtran",
+					"t_loginlog",
+					"t_MaritalStatus",
+					"t_PatientCommunication",
+					"t_Payer",
+					"t_PayerConfig",
+					"t_PayerLocation",
+					"t_PaymentSource",
+					"t_Person",
+					"t_PersonAddress",
+					"t_Physician",
+					"t_physiciangroup",
+					"t_PhysicianPrefCard",
+					"t_PhysicianPrefCardItem",
+					"t_placeofservice",
+					"t_PlannedIndirectCost",
+					"t_PO",
+					"t_POItem",
+					"t_PolicyType",
+					"t_poreceiving",
+					"t_printclaimbatch",
+					"t_PrintClaimCodes",
+					"t_printclaiminsurance",
+					"t_PrintClaimServiceLine",
+					"t_PrintClaimVisit",
+					"t_racecode",
+					"t_relationshipcode",
+					"t_resourceblackout",
+					"t_resourcedefinition",
+					"t_RevenueCode",
+					"t_RoleFunction",
+					"t_scheduledblock",
+					"t_ScheduledEncounter",
+					"t_schedulingconfiguration",
+					"t_ServiceCodeConfig",
+					"t_ServiceDefaultCPT",
+					"t_ServiceMaster",
+					"t_Specialty",
+					"t_srethniccode",
+					"t_srracecode",
+					"t_SupplyUsed",
+					"t_SystemFunction",
+					"t_Taxonomy",
+					"t_TranCode",
+					"t_TranHeader",
+					"t_UOM",
+					"t_UserEmployeePhysicianAssociation",
+					"t_UserPermission",
+					"t_UserPhysician",
+					"t_UserProfile",
+					"t_UserRole",
+					"t_UserRoleCenter",
+					"t_Vendor",
+					"t_VendorContact",
+					"t_VendorLocation",
+					"t_Visit",
+					"t_visitauthcpt",
+					"t_VisitBilling",
+					"t_VisitBillingAdj",
+					"t_VisitBillingPayRemark",
+					"t_VisitCategory",
+					"t_VisitClinical",
+					"t_VisitClinicalICD",
+					"t_VisitCollection",
+					"t_VisitCPT",
+					"t_VisitImplant",
+					"t_VisitIndicator",
+					"t_VisitInsEstimate",
+					"t_VisitInsEstimateCPT",
+					"t_VisitInsurance",
+					"t_VisitInsuranceNetwork",
+					"t_VisitInsuranceSubscriber",
+					"t_VisitLedger",
+					"t_VisitNote",
+					"t_VisitParticipant",
+					"t_VisitPhysician",
+					"t_VisitResponsibleParty",
+					"t_VisitService",
+					"t_workflowcenter",
+					"t_workflowelement",
+					"t_workflowvisit",
+					"t_WoundClass",
+					"t_Zip"
+				]
+			}
+		},
+		"folder": {
+			"name": "Job_HST"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-05-15T00:00:00Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

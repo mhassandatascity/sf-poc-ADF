@@ -1,0 +1,550 @@
+{
+	"name": "PL_Athena",
+	"properties": {
+		"activities": [
+			{
+				"name": "Fetch Data AthenaHealth",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Snowflake_Data_Fetch_KeyPair",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"src_schema": {
+							"value": "@variables('src_schema')",
+							"type": "Expression"
+						},
+						"days_delay": {
+							"value": "@pipeline().parameters.days_delay",
+							"type": "Expression"
+						},
+						"updt_col_nm": "LASTUPDATED",
+						"addl_tbl_filter": {
+							"value": "NOT (t.TABLE_NAME LIKE '%AUDR%' OR t.TABLE_NAME LIKE '%AUDIT%') AND @{variables('table_name_in')}",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						},
+						"tgt_data_ouput_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"tgt_metadata_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.metadata_output_path",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"snowflake_privatekey": {
+							"value": "@variables('snowflake_privatekey')",
+							"type": "Expression"
+						},
+						"snowflake_database": {
+							"value": "@variables('snowflake_database')",
+							"type": "Expression"
+						},
+						"snowflake_warehouse": {
+							"value": "@variables('snowflake_warehouse')",
+							"type": "Expression"
+						},
+						"snowflake_user_name": {
+							"value": "@variables('snowflake_user_name')",
+							"type": "Expression"
+						},
+						"snowflake_account_name": {
+							"value": "@variables('snowflake_account_name')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Append Table Names",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get Table List",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Table List').output.pipelineReturnValue.TableNames",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Append Table Name",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "table_names",
+								"value": {
+									"value": "'@{item().TableName}'",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Set table_name_in",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Append Table Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "table_name_in",
+					"value": {
+						"value": "t.TABLE_NAME IN (@{join(variables('table_names'),',')})",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set table_name_in",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get Table List",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Fetch_Source_Table_Configs",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"table": {
+							"value": "@variables('config_table')",
+							"type": "Expression"
+						},
+						"table_schema": {
+							"value": "@variables('config_table_schema')",
+							"type": "Expression"
+						},
+						"addl_tbl_filter": {
+							"value": "SourceKey = @{variables('source_key')}\nAND \nLoadGroup = '@{pipeline().parameters.table_load_group}'",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "DBT Ingest Athena",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Fetch Data AthenaHealth",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/AthenaHealthReplicated"
+					}
+				}
+			},
+			{
+				"name": "PL_DBT_LOG_FILE_FOLDER_SF",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_LOG_FILE_FOLDER_SF",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"FolderDate": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "DBT Test Athena",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Ingest Athena",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/AthenaHealthReplicated",
+						"dbt_command": "test"
+					}
+				}
+			},
+			{
+				"name": "DBT Silver Load Athena",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Test Athena",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Silver/CORE/AthenaHealth+,+path:models/Gold/ANALYSIS/RCM/Athena_Data_Model fact_PATIENT_VISITS_PROCS",
+						"dbt_command": "run"
+					}
+				}
+			},
+			{
+				"name": "DBT Silver Test Athena",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Silver Load Athena",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Silver/CORE/AthenaHealth+,+path:models/Gold/ANALYSIS/RCM/Athena_Data_Model fact_PATIENT_VISITS_PROCS",
+						"dbt_command": "test"
+					}
+				}
+			},
+			{
+				"name": "DBT Gold Load Athena",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Silver Test Athena",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Gold/ANALYSIS/RCM/Athena_Data_Model",
+						"dbt_command": "run"
+					}
+				}
+			},
+			{
+				"name": "DBT Gold Test Athena",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Gold Load Athena",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Transform",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Gold/ANALYSIS/RCM/Athena_Data_Model",
+						"dbt_command": "test"
+					}
+				}
+			},
+			{
+				"name": "Set pbiDatasetInput",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "DBT Gold Test Athena",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "staged_pbiDataset_inputs",
+					"value": {
+						"value": "@if(greater(length(pipeline().parameters.pbiDatasetInputs), 0), pipeline().parameters.pbiDatasetInputs[0][pipeline().globalParameters.ENV_STAGE], json('[]'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Refresh Athena PBI Datamodel",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set pbiDatasetInput",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_PBI_Dataset_Inputs",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"pbiDatasetInputs": {
+							"value": "@variables('staged_pbiDataset_inputs')",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"policy": {
+			"elapsedTimeMetric": {
+				"duration": "0.00:50:00"
+			}
+		},
+		"parameters": {
+			"table_load_group": {
+				"type": "string"
+			},
+			"days_delay": {
+				"type": "int"
+			},
+			"pbiDatasetInputs": {
+				"type": "array",
+				"defaultValue": []
+			}
+		},
+		"variables": {
+			"table_names": {
+				"type": "Array"
+			},
+			"table_name_in": {
+				"type": "String"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "athena"
+			},
+			"tgt_db": {
+				"type": "String",
+				"defaultValue": "AthenaHealthStaging"
+			},
+			"tgt_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"src_schema": {
+				"type": "String",
+				"defaultValue": "ATHENAONE"
+			},
+			"snowflake_privatekey": {
+				"type": "String",
+				"defaultValue": "sec-athena-snowflake-spiredwpk-priv-key"
+			},
+			"config_database": {
+				"type": "String",
+				"defaultValue": "DEV_META"
+			},
+			"config_table": {
+				"type": "String",
+				"defaultValue": "adf_source_table_configs"
+			},
+			"config_table_schema": {
+				"type": "String",
+				"defaultValue": "etl_metadata"
+			},
+			"source_key": {
+				"type": "String",
+				"defaultValue": "89"
+			},
+			"snowflake_database": {
+				"type": "String",
+				"defaultValue": "ATHENAHEALTH"
+			},
+			"snowflake_warehouse": {
+				"type": "String",
+				"defaultValue": "AH_WAREHOUSE"
+			},
+			"snowflake_user_name": {
+				"type": "String",
+				"defaultValue": "SPIREDWPK"
+			},
+			"snowflake_account_name": {
+				"type": "String",
+				"defaultValue": "dx52700"
+			},
+			"staged_pbiDataset_inputs": {
+				"type": "Array",
+				"defaultValue": []
+			}
+		},
+		"folder": {
+			"name": "Job_Athena"
+		},
+		"annotations": []
+	}
+}

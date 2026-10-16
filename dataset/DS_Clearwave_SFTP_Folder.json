@@ -1,0 +1,30 @@
+{
+	"name": "DS_Clearwave_SFTP_Folder",
+	"properties": {
+		"description": "SFTP dataset for listing folders under each root category",
+		"linkedServiceName": {
+			"referenceName": "LS_Clearwave_SFTP",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"RootFolder": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Clearwave"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "SftpLocation",
+				"folderPath": {
+					"value": "@concat('/prod-ue1-shared-sftp-spire-s3-clearwave/', dataset().RootFolder)",
+					"type": "Expression"
+				}
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

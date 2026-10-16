@@ -1,0 +1,36 @@
+{
+	"name": "TR_NPPES_Monthly_14th_05_00_PM",
+	"properties": {
+		"description": "14th of each month",
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_NPPES",
+					"type": "PipelineReference"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Month",
+				"interval": 1,
+				"startTime": "2025-12-05T01:59:00",
+				"timeZone": "Eastern Standard Time",
+				"schedule": {
+					"minutes": [
+						0
+					],
+					"hours": [
+						17
+					],
+					"monthDays": [
+						14
+					]
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,259 @@
+{
+	"name": "PL_Modmed_Selenium",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set Command",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set File TIme Stamp",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "command",
+					"value": {
+						"value": "/bin/bash -c \" \\\nln -s /datadisk $(pwd)/datadisk && \\\npython3 mmd_selenium_final_kv.py \\\n    --keyvault_base_url=@{pipeline().globalParameters.ENV_KV_BASE_URL} \\\n    --blob_url=@{pipeline().globalParameters.ENV_AZURE_BLOB_ACCOUNT_URL}/ \\\n    --blob_container=@{variables('tgt_container')} \\\n    --blob_output_path=@{concat(pipeline().Pipeline,'/Logs')} \\\n    --file_time_stamp='@{variables('file_time_stamp')}'\"",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Execute_Script_On_Batch_Pool",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set Command",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Batch_Execute_Scripts",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"python_script_path": {
+							"value": "@variables('selenium_script_path')",
+							"type": "Expression"
+						},
+						"command": {
+							"value": "@variables('command')",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set File TIme Stamp",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "file_time_stamp",
+					"value": {
+						"value": "@formatDateTime(convertTimeZone(utcNow(),'UTC','GMT Standard Time'),'yyyy-MM-dd HH:mm:ss')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get Number Of Records",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Execute_Script_On_Batch_Pool",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@concat(pipeline().Pipeline,'/','Logs')",
+								"type": "Expression"
+							},
+							"file": {
+								"value": "@concat('Activity_Log_',replace(variables('file_time_stamp'),':','-'),'.csv')",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Send Alert Mail",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set Mail Body",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Send_Alert_Mail",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"from": {
+							"value": "@variables('from')",
+							"type": "Expression"
+						},
+						"body": {
+							"value": "@variables('mail_body')",
+							"type": "Expression"
+						},
+						"to": {
+							"value": "@split(pipeline().globalParameters.ENV_MAIL_CONFIG_DEVELOPERS,',')",
+							"type": "Expression"
+						},
+						"cc": {
+							"value": "@createArray('spiredata@spireortho.com')",
+							"type": "Expression"
+						},
+						"bcc": {
+							"value": "@createArray('')",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"subject": {
+							"value": "Modmed Selenium Patient Records Processed",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set Mail Body",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Get Number Of Records",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "mail_body",
+					"value": {
+						"value": "@concat('<p>Hi Team,</p><p>A total of <span style=font-weight:bold;font-size:24px;>',string(activity('Get Number Of Records').output.count),'</span> patient records have been processed from the  the Modmed website and stored in the Modmed container in the Azure Storage account.</p>','<p padding-top:0px;>For further details, please refer to the ',concat('<span style=font-weight:bold;>Activity_Log_',replace(variables('file_time_stamp'),':','-'),'.csv'),'</span> and ',concat('<span style=font-weight:bold;>Logging_',replace(variables('file_time_stamp'),':','-')),' </span> files in the path <span style=font-weight:bold;>modmed/Pl_Modmed_Selenium/Logs</span> in the storage account.</p>','<p style=font-weight:bold>Note: This email is automatically generated.</p>')",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"concurrency": 1,
+		"policy": {
+			"elapsedTimeMetric": {
+				"duration": "00.00:25:00"
+			}
+		},
+		"variables": {
+			"selenium_script_path": {
+				"type": "String",
+				"defaultValue": "utility/PL_Modmed"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "modmed"
+			},
+			"command": {
+				"type": "String"
+			},
+			"file_time_stamp": {
+				"type": "String"
+			},
+			"mail_body": {
+				"type": "String"
+			},
+			"from": {
+				"type": "String",
+				"defaultValue": "spiredata@spireortho.com"
+			}
+		},
+		"folder": {
+			"name": "Job_Modmed"
+		},
+		"annotations": []
+	}
+}

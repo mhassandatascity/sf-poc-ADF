@@ -1,0 +1,148 @@
+{
+	"name": "PL_DBT_RunParams_set_Transform",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set dbt warehouse",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "dbt_snowflake_warehouse",
+					"value": {
+						"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_DBT_TRANSFORMATION_WH')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set dbt target",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "dbt_target",
+					"value": {
+						"value": "@concat(pipeline().globalParameters.ENV_STAGE, '_publish')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set dbt role",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "dbt_snowflake_role",
+					"value": {
+						"value": "@{if(\n    equals(toLower(pipeline().globalParameters.ENV_STAGE), 'dev'), \n    concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_TRANSFORMATION_ROLE'), \n    concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_TRANSFORMATION_ROLE')\n)}",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set dbt profiles",
+				"description": "profiles",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "dbt_profiles_dir",
+					"value": "profiles"
+				}
+			},
+			{
+				"name": "Set DBTCommand",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set dbt warehouse",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set dbt profiles",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set dbt role",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set dbt target",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "SetDBTCommand",
+							"value": {
+								"type": "Expression",
+								"content": "@concat(\n  '/app/data/dbt/dbt.sh ', pipeline().parameters.dbt_command,\n  ' -s ', pipeline().parameters.dbt_model_path,\n  ' --profiles-dir ', variables('dbt_profiles_dir'),\n  ' --target ', variables('dbt_target'),\n  ' --snowflake_role ', variables('dbt_snowflake_role'),\n  ' --snowflake_warehouse ', variables('dbt_snowflake_warehouse')\n)"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			}
+		],
+		"parameters": {
+			"dbt_model_path": {
+				"type": "string"
+			},
+			"dbt_command": {
+				"type": "string",
+				"defaultValue": "run"
+			}
+		},
+		"variables": {
+			"dbt_profiles_dir": {
+				"type": "String"
+			},
+			"dbt_target": {
+				"type": "String"
+			},
+			"dbt_snowflake_role": {
+				"type": "String"
+			},
+			"dbt_snowflake_warehouse": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Shared_DBT_Pipelines"
+		},
+		"annotations": []
+	}
+}

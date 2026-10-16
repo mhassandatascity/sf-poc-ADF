@@ -1,0 +1,186 @@
+{
+	"name": "PL_SageIntacct_Data_Fetch",
+	"properties": {
+		"activities": [
+			{
+				"name": "Fetch Data Fro Every Table",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get Table Configs",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Table Configs').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 8,
+					"activities": [
+						{
+							"name": "Execute Data Fetch Pipeline",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@item().table_name"
+								}
+							],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_SageIntacct_Paging",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"tgt_container": {
+										"value": "@pipeline().parameters.tgt_container",
+										"type": "Expression"
+									},
+									"data_output_path": {
+										"value": "@pipeline().parameters.data_output_path",
+										"type": "Expression"
+									},
+									"metadata_output_path": {
+										"value": "@pipeline().parameters.metadata_output_path",
+										"type": "Expression"
+									},
+									"table_name": {
+										"value": "@item().table_name",
+										"type": "Expression"
+									},
+									"session_id": {
+										"value": "@pipeline().parameters.session_id",
+										"type": "Expression"
+									},
+									"config_object": {
+										"value": "@item()",
+										"type": "Expression"
+									},
+									"main_pipeline_name": {
+										"value": "@pipeline().parameters.main_pipeline_name",
+										"type": "Expression"
+									},
+									"main_pipeline_run_id": {
+										"value": "@pipeline().parameters.main_pipeline_run_id",
+										"type": "Expression"
+									},
+									"tgt_db": {
+										"value": "@pipeline().parameters.tgt_db",
+										"type": "Expression"
+									},
+									"tgt_schema": {
+										"value": "@pipeline().parameters.tgt_schema",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get Table Configs",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_JSON",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@pipeline().parameters.config_container",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@pipeline().parameters.config_container_folder",
+								"type": "Expression"
+							},
+							"file": {
+								"value": "@pipeline().parameters.config_file",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"parameters": {
+			"config_container": {
+				"type": "string"
+			},
+			"config_container_folder": {
+				"type": "string"
+			},
+			"config_file": {
+				"type": "string"
+			},
+			"session_id": {
+				"type": "string"
+			},
+			"tgt_container": {
+				"type": "string"
+			},
+			"data_output_path": {
+				"type": "string"
+			},
+			"metadata_output_path": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"tgt_db": {
+				"type": "string"
+			},
+			"tgt_schema": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"session_id": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_SageIntacct"
+		},
+		"annotations": []
+	}
+}

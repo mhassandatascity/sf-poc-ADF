@@ -1,0 +1,27 @@
+{
+	"name": "DS_SqlServer_ORI_PIDM",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_SQLServer_ORI",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"database": "PIDM_ori"
+			}
+		},
+		"parameters": {
+			"schema": {
+				"type": "string"
+			},
+			"table": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": "@dataset().schema",
+			"table": "@dataset().table"
+		}
+	}
+}

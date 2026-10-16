@@ -1,0 +1,50 @@
+{
+	"name": "LS_Snowflake_Spire",
+	"properties": {
+		"description": "Spire Snowflake",
+		"parameters": {
+			"warehouse": {
+				"type": "string",
+				"defaultValue": "DEV_ADF_INGESTION_WH"
+			},
+			"database": {
+				"type": "string",
+				"defaultValue": "DEV_RAW"
+			},
+			"user_name": {
+				"type": "string",
+				"defaultValue": "DEV_SVC_ADF"
+			},
+			"role": {
+				"type": "string",
+				"defaultValue": "DEV_SVC_INGESTION_ROLE"
+			},
+			"account_name": {
+				"type": "string",
+				"defaultValue": "spireortho-aaas.privatelink"
+			}
+		},
+		"annotations": [],
+		"type": "SnowflakeV2",
+		"typeProperties": {
+			"authenticationType": "KeyPair",
+			"accountIdentifier": "@{linkedService().account_name}",
+			"user": "@{linkedService().user_name}",
+			"database": "@{linkedService().database}",
+			"warehouse": "@{linkedService().warehouse}",
+			"role": "@{linkedService().role}",
+			"privateKey": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "sec-spire-snowflake-svc-adf-priv-key"
+			}
+		},
+		"connectVia": {
+			"referenceName": "SAE-SelfHosted-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

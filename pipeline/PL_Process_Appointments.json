@@ -1,0 +1,465 @@
+{
+	"name": "PL_Process_Appointments",
+	"properties": {
+		"activities": [
+			{
+				"name": "Loop Appointments",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Remove Processed Appointments",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Remove Processed Appointments').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "If Appointment Found",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Find Historical Appointments",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@greater(activity('Find Historical Appointments').output.count, 0)",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Update Appointment",
+										"type": "WebActivity",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": true
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"method": "PUT",
+											"headers": {
+												"accept": "application/fhir+json",
+												"content-type": "application/fhir+json",
+												"authorization": {
+													"value": "@pipeline().parameters.BEARER",
+													"type": "Expression"
+												},
+												"x-api-key": {
+													"value": "@pipeline().parameters.API_KEY",
+													"type": "Expression"
+												}
+											},
+											"url": {
+												"value": "@item()['fullUrl']",
+												"type": "Expression"
+											},
+											"body": {
+												"value": "@concat('{  \"resourceType\": \"Appointment\", \"id\": \"',item()['resource']['id'],'\", \"supportingInformation\": [{\n      \"identifier\": {\n        \"system\": \"NEW_PATIENT\",\n        \"value\": \"true\"\n      },\n      \"display\": \"New Patient: true\"\n    }\n  ] }')",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "Record Changed Audit Trail",
+										"type": "Script",
+										"dependsOn": [
+											{
+												"activity": "Update Appointment",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"linkedServiceName": {
+											"referenceName": "LS_Snowflake_Spire_AZIR",
+											"type": "LinkedServiceReference",
+											"parameters": {
+												"warehouse": "RPA_INGESTION_WH",
+												"database": "@concat(pipeline().globalParameters.ENV_STAGE, '_RAW')",
+												"user_name": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_ADF')",
+												"role": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_INGESTION_ROLE')",
+												"account_name": "spireortho-aaas.privatelink"
+											}
+										},
+										"typeProperties": {
+											"scripts": [
+												{
+													"type": "NonQuery",
+													"text": {
+														"value": "@concat('INSERT INTO ',pipeline().globalParameters.ENV_STAGE,'_RAW.RPA_TRACKING.RPA_AUDIT (RUN_ID, APPOINTMENT_ID, PATIENT_ID, PRACTITIONER_ID, TAXONOMY, WAS_CHANGED) VALUES (''', pipeline().parameters.RUN_ID, ''', ''',string(item()['resource']['id']), '-pod25'', ''', split(string(item()['resource']['participant'][activity('Get Index').output.pipelineReturnValue.PATIENT_INDEX]['actor']['reference']) , '/')[10], '-pod25'', ''',split(string(item()['resource']['participant'][activity('Get Index').output.pipelineReturnValue.STAFF_INDEX]['actor']['reference']) , '/')[10], '-pod25'', ''',activity('Get Current Taxonomy').output.value[0]['TAXONOMY'], ''', ''true'')')",
+														"type": "Expression"
+													}
+												}
+											],
+											"scriptBlockExecutionTimeout": "02:00:00"
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "No Change Audit Trail",
+										"type": "Script",
+										"dependsOn": [
+											{
+												"activity": "Generate Appt List",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"linkedServiceName": {
+											"referenceName": "LS_Snowflake_Spire_AZIR",
+											"type": "LinkedServiceReference",
+											"parameters": {
+												"warehouse": "RPA_INGESTION_WH",
+												"database": "@concat(pipeline().globalParameters.ENV_STAGE, '_RAW')",
+												"user_name": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_ADF')",
+												"role": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_INGESTION_ROLE')",
+												"account_name": "spireortho-aaas.privatelink"
+											}
+										},
+										"typeProperties": {
+											"scripts": [
+												{
+													"type": "NonQuery",
+													"text": {
+														"value": "@concat('INSERT INTO ',pipeline().globalParameters.ENV_STAGE,'_RAW.RPA_TRACKING.RPA_AUDIT (RUN_ID, APPOINTMENT_ID, PATIENT_ID, PRACTITIONER_ID, TAXONOMY, WAS_CHANGED, FOUND_APPOINTMENTS) SELECT ''', pipeline().parameters.RUN_ID, ''', ''',string(item()['resource']['id']), '-pod25'', ''', split(string(item()['resource']['participant'][activity('Get Index').output.pipelineReturnValue.PATIENT_INDEX]['actor']['reference']) , '/')[10], '-pod25'', ''',split(string(item()['resource']['participant'][activity('Get Index').output.pipelineReturnValue.STAFF_INDEX]['actor']['reference']) , '/')[10], '-pod25'', ''',activity('Get Current Taxonomy').output.value[0]['TAXONOMY'], ''', ''false'', ARRAY_CONSTRUCT(',activity('Generate Appt List').output.pipelineReturnValue['APPT_IDS'] ,') ')",
+														"type": "Expression"
+													}
+												}
+											],
+											"scriptBlockExecutionTimeout": "02:00:00"
+										}
+									},
+									{
+										"name": "Generate Appt List",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "PL_Get_ID_List",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"FOUND_APPTS": {
+													"value": "@activity('Find Historical Appointments').output.value",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Find Historical Appointments",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "Get Current Taxonomy",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SnowflakeV2Source",
+									"query": {
+										"value": "@concat('with PRACTITIONERS (TAXONOMY, NPI, ID) as (select pt.taxonomy, pt.npi, s.staff_id from ',pipeline().globalParameters.ENV_STAGE,'_RAW.SPIRE_INTERNAL_DATA.RAW_PROVIDER_TAXONOMY pt INNER JOIN ',pipeline().globalParameters.ENV_STAGE,'_RAW.MODMEDSTAGING.STAFF s on pt.NPI = s.NPI) select a.APPOINTMENT_ID, a.facility_id, a.provider_id, p.taxonomy from ',pipeline().globalParameters.ENV_STAGE,'_RAW.MODMEDSTAGING.APPOINTMENT a INNER JOIN PRACTITIONERS p ON a.PROVIDER_ID = p.ID where a.APPOINTMENT_START_DATE > ''',string(formatDateTime(startOfDay(adddays(utcNow(), -1095)), 'yyyy-MM-dd HH:mm:ss')),''' and a.APPOINTMENT_START_DATE < ''',string(formatDateTime(startOfDay(utcNow()), 'yyyy-MM-dd HH:mm:ss')),''' and a.PATIENT_ID like ''', split(string(item()['resource']['participant'][activity('Get Index').output.pipelineReturnValue.PATIENT_INDEX]['actor']['reference']) , '/')[10],'%'' and p.TAXONOMY = ''', activity('Get Current Taxonomy').output.value[0]['TAXONOMY'], '''')",
+										"type": "Expression"
+									},
+									"exportSettings": {
+										"type": "SnowflakeExportCopyCommand"
+									}
+								},
+								"dataset": {
+									"referenceName": "DS_Snowflake_Spire_AZIR",
+									"type": "DatasetReference",
+									"parameters": {
+										"warehouse": "RPA_INGESTION_WH",
+										"database": "@concat(pipeline().globalParameters.ENV_STAGE, '_RAW')",
+										"user_name": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_ADF')",
+										"role": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_INGESTION_ROLE')"
+									}
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "Get Current Taxonomy",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SnowflakeV2Source",
+									"query": {
+										"value": "@concat('select pt.TAXONOMY from ',pipeline().globalParameters.ENV_STAGE,'_RAW.SPIRE_INTERNAL_DATA.RAW_PROVIDER_TAXONOMY pt INNER JOIN ',pipeline().globalParameters.ENV_STAGE,'_RAW.MODMEDSTAGING.STAFF s on pt.NPI = s.NPI where s.staff_id like ''',split(string(item()['resource']['participant'][activity('Get Index').output.pipelineReturnValue.STAFF_INDEX]['actor']['reference']) , '/')[10],'%''')",
+										"type": "Expression"
+									},
+									"exportSettings": {
+										"type": "SnowflakeExportCopyCommand"
+									}
+								},
+								"dataset": {
+									"referenceName": "DS_Snowflake_Spire_AZIR",
+									"type": "DatasetReference",
+									"parameters": {
+										"warehouse": "RPA_INGESTION_WH",
+										"database": "@concat(pipeline().globalParameters.ENV_STAGE, '_RAW')",
+										"user_name": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_ADF')",
+										"role": "@concat(pipeline().globalParameters.ENV_STAGE, '_SVC_INGESTION_ROLE')"
+									}
+								},
+								"firstRowOnly": false
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Remove New Patient",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Get Index",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.Appointments",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@equals(item()['resource']['supportingInformation'][0]['identifier']['value'], 'false')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Remove Non-Doctors",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Filter Appointment Types",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Filter Appointment Types').output.value",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@contains(pipeline().parameters.DOCTORS, json(concat('{\"STAFF_ID\":\"',split(string(item()['resource']['participant'][activity('Get Index').output.pipelineReturnValue.STAFF_INDEX]['actor']['reference']) , '/')[10],'-pod25\"}')))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Remove Processed Appointments",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Remove Non-Doctors",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Remove Non-Doctors').output.value",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@not(contains(pipeline().parameters.EXCLUDE, json(concat('{\"APPOINTMENT_ID\":\"',string(item()['resource']['id']),'-pod25\"}'))))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Filter Appointment Types",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Remove New Patient",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Remove New Patient').output.value",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@not(contains(pipeline().parameters.APPT_TYPES, item()['resource']['appointmentType']['coding'][0]['display']))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get Index",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Get_Indexes",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARTICIPANTS": {
+							"value": "@pipeline().parameters.Appointments[0]['resource']['participant']",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"APPOINTMENTS": {
+				"type": "array"
+			},
+			"BEARER": {
+				"type": "string"
+			},
+			"EXCLUDE": {
+				"type": "array"
+			},
+			"API_KEY": {
+				"type": "string"
+			},
+			"DOCTORS": {
+				"type": "array"
+			},
+			"RUN_ID": {
+				"type": "string"
+			},
+			"APPT_TYPES": {
+				"type": "array",
+				"defaultValue": [
+					"Inj with US Guidance",
+					"IME",
+					"EMG",
+					"Injection",
+					"Peer to Peer",
+					"PRP injection",
+					"MRI - 30 mins",
+					"MA appointment",
+					"XRAY",
+					"MRI - 90 mins",
+					"Surgery",
+					"Bone Stimulator",
+					"Splint 60 min",
+					"Inj with Fluoroscopy",
+					"Office Procedure",
+					"MRI - 20 mins",
+					"Surgery Add-On",
+					"rhizotomy injection",
+					"BPCI Surgical",
+					"Shockwave",
+					"Advanced Motion Analysis",
+					"Personal Training",
+					"Needling",
+					"ORTHOTIC",
+					"DME",
+					"Custom Orthotics",
+					"MRI - 45 min",
+					"Depositions",
+					"MRI - 60 min",
+					"Splint 30 min",
+					"Splint 45 min",
+					"Injection - Bone Health",
+					"Injection - Epidural",
+					"Procedure - Biologics",
+					"Hospital Consult",
+					"In Patient Surgery",
+					"Out Patient Surgery",
+					"PKR",
+					"TKR",
+					"THR",
+					"TSR",
+					"Surgical assist",
+					"ER"
+				]
+			}
+		},
+		"variables": {
+			"OUTPUT": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Job_RPA"
+		},
+		"annotations": []
+	}
+}

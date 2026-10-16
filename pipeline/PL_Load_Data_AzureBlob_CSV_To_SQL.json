@@ -1,0 +1,468 @@
+{
+	"name": "PL_Load_Data_AzureBlob_CSV_To_SQL",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get CSV File Names",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@{pipeline().parameters.data_output_path}",
+								"type": "Expression"
+							},
+							"file": "*.csv",
+							"container": {
+								"value": "@pipeline().parameters.container",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Filter Null Fixed Files",
+				"description": "In case any null fixed files is in the container due to pipeline fails",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Get CSV File Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get CSV File Names').output.childItems",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@not(contains(item().name, 'nullfixed.csv'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "For Each File Filter Empty Files",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Filter Null Fixed Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Filter Null Fixed Files').output.Value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Get File Column Count",
+							"type": "GetMetadata",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().name}"
+								}
+							],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@pipeline().parameters.data_output_path",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@{item().name}",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.container",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"columnCount"
+								],
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							}
+						},
+						{
+							"name": "If File Has Columns",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Get File Column Count",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().name}"
+								}
+							],
+							"typeProperties": {
+								"expression": {
+									"value": "@greater(activity('Get File Column Count').output.columnCount, 0)",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Copy Skipped Table Row Count",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().name}"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "DelimitedTextSource",
+												"additionalColumns": [
+													{
+														"name": "DBName",
+														"value": {
+															"value": "@pipeline().parameters.database_name",
+															"type": "Expression"
+														}
+													},
+													{
+														"name": "TableSchema",
+														"value": {
+															"value": "@pipeline().parameters.schema_name",
+															"type": "Expression"
+														}
+													},
+													{
+														"name": "TableName",
+														"value": {
+															"value": "@replace(item().name,'.csv','')",
+															"type": "Expression"
+														}
+													},
+													{
+														"name": "BlobFilePath",
+														"value": {
+															"value": "@{pipeline().parameters.container}/@{pipeline().parameters.data_output_path}/@{item().name}",
+															"type": "Expression"
+														}
+													},
+													{
+														"name": "RowCount",
+														"value": {
+															"value": "0",
+															"type": "Expression"
+														}
+													}
+												],
+												"storeSettings": {
+													"type": "AzureBlobStorageReadSettings",
+													"recursive": true,
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "DelimitedTextReadSettings"
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"mappings": [
+													{
+														"source": {
+															"name": "DBName",
+															"type": "String"
+														},
+														"sink": {
+															"name": "DBName",
+															"physicalType": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "TableSchema",
+															"type": "String"
+														},
+														"sink": {
+															"name": "TableSchema",
+															"physicalType": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "TableName",
+															"type": "String"
+														},
+														"sink": {
+															"name": "TableName",
+															"physicalType": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "BlobFilePath",
+															"type": "String"
+														},
+														"sink": {
+															"name": "BlobFilePath",
+															"physicalType": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "RowCount",
+															"type": "String"
+														},
+														"sink": {
+															"name": "RowCount",
+															"physicalType": "String"
+														}
+													}
+												],
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_DummyFile",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@{pipeline().parameters.metadata_output_path}/TableRowCounts",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@item().name",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.container",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Append files_to_copy",
+										"type": "AppendVariable",
+										"dependsOn": [],
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().name}"
+											}
+										],
+										"typeProperties": {
+											"variableName": "files_to_copy",
+											"value": {
+												"value": "@item()",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Execute PL_Combine_And_Update_Row_Counts",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "For Each File Filter Empty Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Combine_And_Update_Metadata",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"tgt_container": {
+							"value": "@pipeline().parameters.container",
+							"type": "Expression"
+						},
+						"tgt_metadata_output_path": {
+							"value": "@pipeline().parameters.metadata_output_path",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@pipeline().parameters.database_name",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@pipeline().parameters.schema_name",
+							"type": "Expression"
+						},
+						"tgt_metadata_schema": {
+							"value": "@pipeline().parameters.metadata_schema",
+							"type": "Expression"
+						},
+						"row_count_tables": {
+							"value": "@createArray('TableRowCounts', 'TableUpdatedRowCounts')",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"container": {
+				"type": "string"
+			},
+			"data_output_path": {
+				"type": "string"
+			},
+			"metadata_output_path": {
+				"type": "string"
+			},
+			"syncdata_output_path": {
+				"type": "string"
+			},
+			"database_name": {
+				"type": "string"
+			},
+			"schema_name": {
+				"type": "string"
+			},
+			"metadata_schema": {
+				"type": "string",
+				"defaultValue": "metadata"
+			},
+			"syncdata_schema": {
+				"type": "string",
+				"defaultValue": "syncdata"
+			},
+			"write_mode": {
+				"type": "string",
+				"defaultValue": "truncate"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"files_to_copy": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "Shared_Pipelines"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,607 @@
+{
+	"name": "PL_Snowflake_Data_Fetch_KeyPair",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set current_date",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "current_date",
+					"value": {
+						"value": "@convertTimeZone(utcnow(),'UTC','Eastern Standard Time')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set data_start_date",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set current_date_str",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "data_start_date",
+					"value": {
+						"value": "@adddays(variables('current_date'), mul(-1, pipeline().parameters.days_delay))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set data_start_date_str",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set data_start_date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "data_start_date_str",
+					"value": {
+						"value": "@formatDateTime(variables('data_start_date'), 'yyyy-MM-dd')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set current_date_str",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set current_date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "current_date_str",
+					"value": {
+						"value": "@formatDateTime(variables('current_date'), 'yyyy-MM-dd')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get Table List",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Set data_start_date_str",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "SELECT \n    t.TABLE_NAME,\n    CASE WHEN c.COLUMN_NAME IS NULL THEN 0 ELSE 1 END HAS_UPDATED_AT_COLUMN\nFROM INFORMATION_SCHEMA.TABLES t\nLEFT JOIN INFORMATION_SCHEMA.COLUMNS c\n    ON t.TABLE_CATALOG = c.TABLE_CATALOG\n    AND t.TABLE_SCHEMA = c.TABLE_SCHEMA\n    AND t.TABLE_NAME = c.TABLE_NAME\n    AND c.COLUMN_NAME = '@{pipeline().parameters.updt_col_nm}'\nWHERE t.TABLE_SCHEMA = '@{pipeline().parameters.src_schema}'\n@{if(equals(pipeline().parameters.addl_tbl_filter, 'NONE'), '', concat('AND (', pipeline().parameters.addl_tbl_filter, ')'))}",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_Snowflake_EMR",
+						"type": "DatasetReference",
+						"parameters": {
+							"private_key": {
+								"value": "@pipeline().parameters.snowflake_privatekey",
+								"type": "Expression"
+							},
+							"database": {
+								"value": "@pipeline().parameters.snowflake_database",
+								"type": "Expression"
+							},
+							"warehouse": {
+								"value": "@pipeline().parameters.snowflake_warehouse",
+								"type": "Expression"
+							},
+							"user_name": {
+								"value": "@pipeline().parameters.snowflake_user_name",
+								"type": "Expression"
+							},
+							"account_name": {
+								"value": "@pipeline().parameters.snowflake_account_name",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "For Each Table",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get Table List",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Table List').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 50,
+					"activities": [
+						{
+							"name": "If Table Has Update Column",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(int(item().HAS_UPDATED_AT_COLUMN), 1)",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Get Table Data All Rows",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().TABLE_NAME}"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "SnowflakeV2Source",
+												"query": {
+													"value": "SELECT \n    *\nFROM @{pipeline().parameters.src_schema}.@{item().TABLE_NAME}",
+													"type": "Expression"
+												},
+												"exportSettings": {
+													"type": "SnowflakeExportCopyCommand"
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings",
+													"copyBehavior": "MergeFiles"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": true,
+											"stagingSettings": {
+												"linkedServiceName": {
+													"referenceName": "LS_SpireDF_Blob_SAS",
+													"type": "LinkedServiceReference",
+													"parameters": {
+														"auth_sas_url_sec": {
+															"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+															"type": "Expression"
+														}
+													}
+												},
+												"path": {
+													"value": "@{pipeline().parameters.tgt_container}/@{pipeline().parameters.tgt_data_ouput_path}",
+													"type": "Expression"
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_Snowflake_EMR",
+												"type": "DatasetReference",
+												"parameters": {
+													"private_key": {
+														"value": "@pipeline().parameters.snowflake_privatekey",
+														"type": "Expression"
+													},
+													"database": {
+														"value": "@pipeline().parameters.snowflake_database",
+														"type": "Expression"
+													},
+													"warehouse": {
+														"value": "@pipeline().parameters.snowflake_warehouse",
+														"type": "Expression"
+													},
+													"user_name": {
+														"value": "@pipeline().parameters.snowflake_user_name",
+														"type": "Expression"
+													},
+													"account_name": {
+														"value": "@pipeline().parameters.snowflake_account_name",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.tgt_data_ouput_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@{item().TABLE_NAME}.csv",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Get Table Data Updated Rows",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().TABLE_NAME}"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "SnowflakeV2Source",
+												"query": {
+													"value": "SELECT \n    *\nFROM @{pipeline().parameters.src_schema}.@{item().TABLE_NAME}\nWHERE (@{pipeline().parameters.updt_col_nm} >= '@{variables('data_start_date_str')}' OR @{pipeline().parameters.updt_col_nm} IS NULL)\n",
+													"type": "Expression"
+												},
+												"exportSettings": {
+													"type": "SnowflakeExportCopyCommand"
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings",
+													"copyBehavior": "MergeFiles"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": true,
+											"stagingSettings": {
+												"linkedServiceName": {
+													"referenceName": "LS_SpireDF_Blob_SAS",
+													"type": "LinkedServiceReference",
+													"parameters": {
+														"auth_sas_url_sec": {
+															"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+															"type": "Expression"
+														}
+													}
+												},
+												"path": {
+													"value": "@{pipeline().parameters.tgt_container}/@{pipeline().parameters.tgt_data_ouput_path}",
+													"type": "Expression"
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_Snowflake_EMR",
+												"type": "DatasetReference",
+												"parameters": {
+													"private_key": {
+														"value": "@pipeline().parameters.snowflake_privatekey",
+														"type": "Expression"
+													},
+													"database": {
+														"value": "@pipeline().parameters.snowflake_database",
+														"type": "Expression"
+													},
+													"warehouse": {
+														"value": "@pipeline().parameters.snowflake_warehouse",
+														"type": "Expression"
+													},
+													"user_name": {
+														"value": "@pipeline().parameters.snowflake_user_name",
+														"type": "Expression"
+													},
+													"account_name": {
+														"value": "@pipeline().parameters.snowflake_account_name",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.tgt_data_ouput_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@{item().TABLE_NAME}.csv",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								]
+							}
+						},
+						{
+							"name": "Get Table Full Row Counts",
+							"description": "Needed for logging in replication database",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().TABLE_NAME}"
+								}
+							],
+							"typeProperties": {
+								"source": {
+									"type": "SnowflakeV2Source",
+									"query": {
+										"value": "SELECT \n     '@{pipeline().parameters.tgt_db}' AS \"DBName\"\n    ,'@{pipeline().parameters.tgt_schema}' AS \"TableSchema\"\n    ,'@{item().TABLE_NAME}' AS \"TableName\"\n    ,'@{concat(\n        pipeline().parameters.tgt_container, '/',\n        pipeline().parameters.tgt_data_ouput_path, '/',\n        item().TABLE_NAME, '.csv'\n    )}' AS \"BlobFilePath\"\n    ,COUNT(1) AS \"FullRowCount\"\nFROM @{pipeline().parameters.src_schema}.@{item().TABLE_NAME}",
+										"type": "Expression"
+									},
+									"exportSettings": {
+										"type": "SnowflakeExportCopyCommand"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_Snowflake_EMR",
+									"type": "DatasetReference",
+									"parameters": {
+										"private_key": {
+											"value": "@pipeline().parameters.snowflake_privatekey",
+											"type": "Expression"
+										},
+										"database": {
+											"value": "@pipeline().parameters.snowflake_database",
+											"type": "Expression"
+										},
+										"warehouse": {
+											"value": "@pipeline().parameters.snowflake_warehouse",
+											"type": "Expression"
+										},
+										"user_name": {
+											"value": "@pipeline().parameters.snowflake_user_name",
+											"type": "Expression"
+										},
+										"account_name": {
+											"value": "@pipeline().parameters.snowflake_account_name",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().parameters.tgt_metadata_output_path}/TableFullRowCounts",
+											"type": "Expression"
+										},
+										"file": {
+											"value": "@{item().TABLE_NAME}.csv",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@pipeline().parameters.tgt_container",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "No-op 1",
+							"description": "For grouping dependencies",
+							"type": "Wait",
+							"dependsOn": [
+								{
+									"activity": "Get Table Full Row Counts",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "If Table Has Update Column",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 1
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"src_schema": {
+				"type": "string"
+			},
+			"days_delay": {
+				"type": "int"
+			},
+			"updt_col_nm": {
+				"type": "string"
+			},
+			"addl_tbl_filter": {
+				"type": "string",
+				"defaultValue": "NONE"
+			},
+			"tgt_container": {
+				"type": "string"
+			},
+			"tgt_db": {
+				"type": "string"
+			},
+			"tgt_schema": {
+				"type": "string"
+			},
+			"tgt_data_ouput_path": {
+				"type": "string"
+			},
+			"tgt_metadata_output_path": {
+				"type": "string"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"snowflake_privatekey": {
+				"type": "string"
+			},
+			"tgt_metadata_schema": {
+				"type": "string",
+				"defaultValue": "metadata"
+			},
+			"snowflake_database": {
+				"type": "string"
+			},
+			"snowflake_warehouse": {
+				"type": "string"
+			},
+			"snowflake_user_name": {
+				"type": "string"
+			},
+			"snowflake_account_name": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"current_date": {
+				"type": "String"
+			},
+			"data_start_date": {
+				"type": "String"
+			},
+			"data_start_date_str": {
+				"type": "String"
+			},
+			"current_date_str": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Shared_Snowflake_Pipelines"
+		},
+		"annotations": []
+	}
+}

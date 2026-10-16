@@ -1,0 +1,382 @@
+{
+	"name": "PL_OData_Data_Fetch",
+	"properties": {
+		"activities": [
+			{
+				"name": "For Each Entity Get Data",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Read Table Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Read Table Names').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "If Copy With Data Flow",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [
+								{
+									"name": "item",
+									"value": "@{item().TableName}"
+								}
+							],
+							"typeProperties": {
+								"expression": {
+									"value": "@contains(pipeline().parameters.entities_require_data_flow_copy, item().TableName)",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Get Entity Data",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 3,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().TableName}"
+											}
+										],
+										"typeProperties": {
+											"source": {
+												"type": "ODataSource",
+												"httpRequestTimeout": "00:12:00"
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false
+										},
+										"inputs": [
+											{
+												"referenceName": "DS_OData",
+												"type": "DatasetReference",
+												"parameters": {
+													"service_url": {
+														"value": "@activity('Get OData URL').output.value",
+														"type": "Expression"
+													},
+													"auth_user": {
+														"value": "@activity('Get OData User').output.value",
+														"type": "Expression"
+													},
+													"auth_password_sec": {
+														"value": "@pipeline().parameters.src_odata_password_sec",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@item().TableName",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DS_AzureBlob_Spire_SingleFile_CSV",
+												"type": "DatasetReference",
+												"parameters": {
+													"auth_sas_url_sec": {
+														"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+														"type": "Expression"
+													},
+													"path": {
+														"value": "@pipeline().parameters.tgt_data_output_path",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@{item().TableName}.csv",
+														"type": "Expression"
+													},
+													"container": {
+														"value": "@pipeline().parameters.tgt_container",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Get Entity Data With Data Flow",
+										"type": "ExecuteDataFlow",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "item",
+												"value": "@{item().TableName}"
+											}
+										],
+										"typeProperties": {
+											"dataflow": {
+												"referenceName": "DF_Rest_OData_Alt_To_CSV",
+												"type": "DataFlowReference",
+												"parameters": {
+													"file_name": {
+														"value": "'@{item().TableName}.csv'",
+														"type": "Expression"
+													}
+												},
+												"datasetParameters": {
+													"RestODataSource": {
+														"service_url": {
+															"value": "@activity('Get OData URL').output.value",
+															"type": "Expression"
+														},
+														"auth_user": {
+															"value": "@activity('Get OData User').output.value",
+															"type": "Expression"
+														},
+														"auth_password_sec": {
+															"value": "@pipeline().parameters.src_odata_password_sec",
+															"type": "Expression"
+														},
+														"path": {
+															"value": "@item().TableName",
+															"type": "Expression"
+														}
+													},
+													"CSVSink": {
+														"auth_sas_url_sec": {
+															"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+															"type": "Expression"
+														},
+														"path": {
+															"value": "@pipeline().parameters.tgt_data_output_path",
+															"type": "Expression"
+														},
+														"file": {
+															"value": "@{item().TableName}.csv",
+															"type": "Expression"
+														},
+														"container": {
+															"value": "@pipeline().parameters.tgt_container",
+															"type": "Expression"
+														}
+													}
+												}
+											},
+											"compute": {
+												"coreCount": 8,
+												"computeType": "General"
+											},
+											"traceLevel": "Fine"
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get OData URL",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/@{pipeline().parameters.src_odata_url_sec}?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": {
+							"value": "@pipeline().globalParameters.ENV_KV_RESOURCE_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Get OData User",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@{pipeline().globalParameters.ENV_KV_BASE_URL}/secrets/@{pipeline().parameters.src_odata_user_sec}?api-version=7.4",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "SAE-SelfHosted-IR",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "Read Table Names",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Get OData URL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get OData User",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "SELECT \n    TableName\nFROM \n    @{pipeline().parameters.config_database}.@{pipeline().parameters.config_table_schema}.@{pipeline().parameters.config_table}\nWHERE \n    SourceKey=@{pipeline().parameters.config_source_key}\n    AND \n    LoadGroup = '@{pipeline().parameters.load_group}'",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_Snowflake_Spire",
+						"type": "DatasetReference",
+						"parameters": {
+							"warehouse": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+								"type": "Expression"
+							},
+							"database": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_RAW')",
+								"type": "Expression"
+							},
+							"user_name": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+								"type": "Expression"
+							},
+							"role": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"parameters": {
+			"src_odata_url_sec": {
+				"type": "string"
+			},
+			"src_odata_user_sec": {
+				"type": "string"
+			},
+			"src_odata_password_sec": {
+				"type": "string"
+			},
+			"tgt_container": {
+				"type": "string"
+			},
+			"tgt_container_folder": {
+				"type": "string"
+			},
+			"tgt_db": {
+				"type": "string"
+			},
+			"tgt_schema": {
+				"type": "string"
+			},
+			"tgt_data_output_path": {
+				"type": "string"
+			},
+			"entities_require_data_flow_copy": {
+				"type": "array"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"config_database": {
+				"type": "string"
+			},
+			"config_table": {
+				"type": "string"
+			},
+			"config_source_key": {
+				"type": "string"
+			},
+			"config_table_schema": {
+				"type": "string"
+			},
+			"load_group": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Shared_OData_Pipelines"
+		},
+		"annotations": []
+	}
+}

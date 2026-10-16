@@ -1,0 +1,127 @@
+{
+	"name": "PL_ModmedFileCheck_sql",
+	"properties": {
+		"activities": [
+			{
+				"name": "ModmedStatusCheck",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": {
+							"value": "@concat(\n'WITH FileFetchStatus AS (\n    SELECT Run_Status AS FileFetchStatus\n    FROM ', pipeline().globalParameters.ENV_STAGE, '_meta.etl_metadata.audit_log_adf\n    WHERE main_pipeline_Name = ''PL_Modmed''\n      AND Pipeline_Name = ''PL_S3DataFetch''\n      AND Pipeline_Step_Name LIKE ''Fetching File onsmd_%''\n      AND run_start > DATEADD(HOUR, -5, CURRENT_TIMESTAMP())\n    ORDER BY run_start DESC\n    LIMIT 1\n),\nMainPipelineStatus AS (\n    SELECT Run_Status AS MainPipelineStatus\n    FROM ', pipeline().globalParameters.ENV_STAGE, '_meta.etl_metadata.audit_log_adf\n    WHERE main_pipeline_Name = ''PL_Modmed''\n      AND Pipeline_Name = ''PL_Modmed''\n      AND Pipeline_Step_Name = ''Main Pipeline''\n    ORDER BY run_start DESC\n    LIMIT 1\n)\nSELECT \n    CASE \n        WHEN f.FileFetchStatus IS NULL AND m.MainPipelineStatus IS NULL THEN ''Not_running''\n        WHEN (f.FileFetchStatus = ''started'' AND m.MainPipelineStatus = ''started'') \n          OR (f.FileFetchStatus = ''Succeeded'' AND m.MainPipelineStatus = ''started'') \n        THEN ''running''\n        ELSE ''Not_running''\n    END AS Result\nFROM FileFetchStatus f\nFULL OUTER JOIN MainPipelineStatus m ON 1 = 1;'\n)\n",
+							"type": "Expression"
+						},
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						}
+					},
+					"dataset": {
+						"referenceName": "DS_Snowflake_Spire",
+						"type": "DatasetReference",
+						"parameters": {
+							"warehouse": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_ADF_INGESTION_WH')",
+								"type": "Expression"
+							},
+							"database": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_META')",
+								"type": "Expression"
+							},
+							"user_name": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_ADF')",
+								"type": "Expression"
+							},
+							"role": {
+								"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_SVC_INGESTION_ROLE')",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			},
+			{
+				"name": "Execute pipeline if not running",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "ModmedStatusCheck",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(activity('ModmedStatusCheck').output.firstRow.Result, 'Not_running')\n",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Execute PL_Modmed",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_Modmed",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"table_load_group": {
+										"value": "@pipeline().parameters.table_load_group",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"table_load_group": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"Run_status": {
+				"type": "String"
+			},
+			"snf_etl_database": {
+				"type": "String",
+				"defaultValue": "DEV_META"
+			},
+			"snf_etl_warehouse": {
+				"type": "String",
+				"defaultValue": "DEV_ADF_INGESTION_WH"
+			},
+			"snf_etl_username": {
+				"type": "String",
+				"defaultValue": "DEV_SVC_ADF"
+			},
+			"snf_etl_role": {
+				"type": "String",
+				"defaultValue": "DEV_SVC_INGESTION_ROLE"
+			}
+		},
+		"folder": {
+			"name": "Job_Modmed"
+		},
+		"annotations": []
+	}
+}

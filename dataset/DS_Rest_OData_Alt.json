@@ -1,0 +1,49 @@
+{
+	"name": "DS_Rest_OData_Alt",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_REST_OData_Alt",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"service_url": {
+					"value": "@dataset().service_url",
+					"type": "Expression"
+				},
+				"auth_user": {
+					"value": "@dataset().auth_user",
+					"type": "Expression"
+				},
+				"auth_password_sec": {
+					"value": "@dataset().auth_password_sec",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"service_url": {
+				"type": "string"
+			},
+			"auth_user": {
+				"type": "string"
+			},
+			"auth_password_sec": {
+				"type": "string"
+			},
+			"path": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "OData"
+		},
+		"annotations": [],
+		"type": "RestResource",
+		"typeProperties": {
+			"relativeUrl": {
+				"value": "@dataset().path",
+				"type": "Expression"
+			}
+		},
+		"schema": []
+	}
+}

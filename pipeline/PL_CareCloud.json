@@ -1,0 +1,626 @@
+{
+	"name": "PL_CareCloud",
+	"properties": {
+		"activities": [
+			{
+				"name": "Fetch Data CareCloud ODS",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths for ODS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Snowflake_Data_Fetch",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"src_schema": {
+							"value": "@variables('src_schema_ODS')",
+							"type": "Expression"
+						},
+						"days_delay": {
+							"value": "@pipeline().parameters.days_delay",
+							"type": "Expression"
+						},
+						"updt_col_nm": "UPDATED_AT",
+						"addl_tbl_filter": {
+							"value": "@variables('table_names_in_ODS')",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema_ODS')",
+							"type": "Expression"
+						},
+						"tgt_data_ouput_path": {
+							"value": "@activity('Execute PL_Output_Paths for ODS').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"tgt_metadata_output_path": {
+							"value": "@{activity('Execute PL_Output_Paths for ODS').output.pipelineReturnValue.metadata_output_path}/ODS",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"sf_conn_str_sec": {
+							"value": "@variables('conn_str_sec_name')",
+							"type": "Expression"
+						},
+						"snowflake_database": {
+							"value": "@variables('snowflake_database_ods')",
+							"type": "Expression"
+						},
+						"snowflake_warehouse": {
+							"value": "@variables('snowflake_warehouse')",
+							"type": "Expression"
+						},
+						"snowflake_user_name": {
+							"value": "@variables('snowflake_user_name')",
+							"type": "Expression"
+						},
+						"snowflake_account_name": {
+							"value": "@variables('snowflake_account_name')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Fetch Data CareCloud OLAP",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths For OLAP",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Snowflake_Data_Fetch",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"src_schema": {
+							"value": "@variables('src_schema_OLAP')",
+							"type": "Expression"
+						},
+						"days_delay": {
+							"value": "@pipeline().parameters.days_delay",
+							"type": "Expression"
+						},
+						"updt_col_nm": "UPDATED_AT",
+						"addl_tbl_filter": {
+							"value": "@variables('table_names_in_OLAP')",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema_OLAP')",
+							"type": "Expression"
+						},
+						"tgt_data_ouput_path": {
+							"value": "@activity('Execute PL_Output_Paths For OLAP').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"tgt_metadata_output_path": {
+							"value": "@{activity('Execute PL_Output_Paths For OLAP').output.pipelineReturnValue.metadata_output_path}/OLAP",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"sf_conn_str_sec": {
+							"value": "@variables('conn_str_sec_name')",
+							"type": "Expression"
+						},
+						"snowflake_database": {
+							"value": "@variables('snowflake_database_olap')",
+							"type": "Expression"
+						},
+						"snowflake_warehouse": {
+							"value": "@variables('snowflake_warehouse')",
+							"type": "Expression"
+						},
+						"snowflake_user_name": {
+							"value": "@variables('snowflake_user_name')",
+							"type": "Expression"
+						},
+						"snowflake_account_name": {
+							"value": "@variables('snowflake_account_name')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths for ODS",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set table_name_in_ODS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema_ODS')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths For OLAP",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set table_name_in_OLAP",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema_OLAP')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Append Table Names",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get Table List",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Table List').output.pipelineReturnValue.TableNames",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "If ODS",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(item().TableSchema,'ODS')",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Append Table Names OLAP",
+										"type": "AppendVariable",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "table_names_OLAP",
+											"value": {
+												"value": "'@{item().TableName}'",
+												"type": "Expression"
+											}
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Append Table Names ODS",
+										"type": "AppendVariable",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "table_names_ODS",
+											"value": {
+												"value": "'@{item().TableName}'",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Set table_name_in_ODS",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Append Table Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "table_names_in_ODS",
+					"value": {
+						"value": "t.TABLE_NAME IN (@{join(variables('table_names_ODS'),',')})",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get Table List",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Fetch_Source_Table_Configs",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"table": {
+							"value": "@variables('config_table')",
+							"type": "Expression"
+						},
+						"database": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_META')",
+							"type": "Expression"
+						},
+						"table_schema": {
+							"value": "@variables('config_table_schema')",
+							"type": "Expression"
+						},
+						"addl_tbl_filter": {
+							"value": "SourceKey = @{variables('source_key')}\nAND \n((LoadGroup = '@{pipeline().parameters.table_load_group_ODS}' AND TableSchema = '@{variables('tgt_schema_ODS')}') OR (LoadGroup = '@{pipeline().parameters.table_load_group_OLAP}' AND TableSchema = '@{variables('tgt_schema_OLAP')}'))",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set table_name_in_OLAP",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Append Table Names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "table_names_in_OLAP",
+					"value": {
+						"value": "t.TABLE_NAME IN (@{join(variables('table_names_OLAP'),',')})",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "PL_DBT_LOG_FILE_FOLDER_SF",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths for ODS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_LOG_FILE_FOLDER_SF",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"FolderDate": {
+							"value": "@activity('Execute PL_Output_Paths for ODS').output.pipelineReturnValue.data_folder_path",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "PL_DBT_LOG_FILE_FOLDER_SF_copy1",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths For OLAP",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_LOG_FILE_FOLDER_SF",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"FolderDate": {
+							"value": "@activity('Execute PL_Output_Paths For OLAP').output.pipelineReturnValue.data_folder_path",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "DBT Ingest CareCloud",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Fetch Data CareCloud ODS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Fetch Data CareCloud OLAP",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/CareCloudReplicated"
+					}
+				}
+			},
+			{
+				"name": "DBT Test CareCloud",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "DBT Ingest CareCloud",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/CareCloudReplicated",
+						"dbt_command": "test"
+					}
+				}
+			}
+		],
+		"policy": {
+			"elapsedTimeMetric": {
+				"duration": "0.01:15:00"
+			}
+		},
+		"parameters": {
+			"days_delay": {
+				"type": "int",
+				"defaultValue": 10
+			},
+			"replication_db_sp": {
+				"type": "string",
+				"defaultValue": "job_INCREMENTAL_UPDATE"
+			},
+			"table_load_group_ODS": {
+				"type": "string"
+			},
+			"table_load_group_OLAP": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "carecloud"
+			},
+			"tgt_db": {
+				"type": "String",
+				"defaultValue": "CareCloudStaging"
+			},
+			"tgt_schema_ODS": {
+				"type": "String",
+				"defaultValue": "ODS"
+			},
+			"tgt_schema_OLAP": {
+				"type": "String",
+				"defaultValue": "OLAP"
+			},
+			"src_schema_ODS": {
+				"type": "String",
+				"defaultValue": "SHARE"
+			},
+			"src_schema_OLAP": {
+				"type": "String",
+				"defaultValue": "SHARE"
+			},
+			"conn_str_sec_name": {
+				"type": "String",
+				"defaultValue": "sec-carecloud-snowflake-conn-str"
+			},
+			"table_names_in_ODS": {
+				"type": "String"
+			},
+			"table_names_in_OLAP": {
+				"type": "String"
+			},
+			"table_names_ODS": {
+				"type": "Array"
+			},
+			"table_names_OLAP": {
+				"type": "Array"
+			},
+			"config_database": {
+				"type": "String",
+				"defaultValue": "DEV_META"
+			},
+			"config_table": {
+				"type": "String",
+				"defaultValue": "adf_source_table_configs"
+			},
+			"config_table_schema": {
+				"type": "String",
+				"defaultValue": "ETL_METADATA"
+			},
+			"source_key": {
+				"type": "String",
+				"defaultValue": "3"
+			},
+			"snowflake_database_ods": {
+				"type": "String",
+				"defaultValue": "CARECLOUD_ODS"
+			},
+			"snowflake_warehouse": {
+				"type": "String",
+				"defaultValue": "PUBLIC_WH"
+			},
+			"snowflake_user_name": {
+				"type": "String",
+				"defaultValue": "octavio@genware.com"
+			},
+			"snowflake_account_name": {
+				"type": "String",
+				"defaultValue": "mba54754.us-east-1"
+			},
+			"snowflake_database_olap": {
+				"type": "String",
+				"defaultValue": "CARECLOUD_OLAP"
+			}
+		},
+		"folder": {
+			"name": "Job_CareCloud"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,768 @@
+{
+	"name": "PL_Modmed",
+	"properties": {
+		"activities": [
+			{
+				"name": "If Data Output Path Exists Then Load Metadata",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Test Bronze ModMed tables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Get data_output_path_exists').output.exists",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Send Alert Mail",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_Send_Alert_Mail",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"from": {
+										"value": "@variables('from')",
+										"type": "Expression"
+									},
+									"body": {
+										"value": "@concat('<p>Hi Team,</p><p>Modmed Source file with name <span  style=font-weight:bold>onsmd_',variables('file_date'),if(equals(pipeline().parameters.table_load_group,'Priority'),'_enc_priority','_enc'),'</span> is not yet uploaded in the source system - S3 bucket.</p><p>Please trigger the pipeline manually when the source file is available.</p>','<p style=font-weight:bold>Note: This email is automatically generated.</p>')",
+										"type": "Expression"
+									},
+									"to": {
+										"value": "@split(pipeline().globalParameters.ENV_MAIL_CONFIG_DEVELOPERS,',')",
+										"type": "Expression"
+									},
+									"cc": {
+										"value": "@createArray('spiredata@spireortho.com')",
+										"type": "Expression"
+									},
+									"bcc": {
+										"value": "@createArray('')",
+										"type": "Expression"
+									},
+									"main_pipeline_run_id": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									},
+									"main_pipeline_name": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"subject": {
+										"value": "Modmed Source File Not Found",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Fail1",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "Send Alert Mail",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Modmed Source File Not Found",
+								"errorCode": "1"
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Execute Ascent pipeline",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_Ascent",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Execute PL_Output_Paths",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Output_Paths",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"tgt_db": {
+							"value": "@variables('tgt_db')",
+							"type": "Expression"
+						},
+						"tgt_schema": {
+							"value": "@variables('tgt_schema')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set file_date",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "file_date",
+					"value": {
+						"value": "@formatDateTime(convertTimeZone(addDays(utcNow(),-1),'UTC','Eastern Standard Time'),'yyyy-MM-dd')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Execute PL_S3DataFetch_",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "For Each of Todays Folders",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_S3DataFetch",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"file_date": {
+							"value": "@variables('file_date')",
+							"type": "Expression"
+						},
+						"src_bucket": {
+							"value": "@variables('src_bucket')",
+							"type": "Expression"
+						},
+						"src_path": {
+							"value": "@variables('src_path')",
+							"type": "Expression"
+						},
+						"tgt_container": {
+							"value": "@variables('tgt_container')",
+							"type": "Expression"
+						},
+						"tgt_data_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+							"type": "Expression"
+						},
+						"tgt_zip_output_path": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.bin_output_path",
+							"type": "Expression"
+						},
+						"tgt_metadata_output_path": {
+							"value": "@{activity('Execute PL_Output_Paths').output.pipelineReturnValue.metadata_output_path}",
+							"type": "Expression"
+						},
+						"config_table_db": {
+							"value": "@concat(toUpper(pipeline().globalParameters.ENV_STAGE), '_META')",
+							"type": "Expression"
+						},
+						"config_table": {
+							"value": "@variables('config_table_name')",
+							"type": "Expression"
+						},
+						"source_key": {
+							"value": "@variables('source_key')",
+							"type": "Expression"
+						},
+						"config_table_schema": {
+							"value": "@variables('config_table_schema')",
+							"type": "Expression"
+						},
+						"table_load_group": {
+							"value": "@pipeline().parameters.table_load_group",
+							"type": "Expression"
+						},
+						"sec_access_key": {
+							"value": "@variables('sec_access_key')",
+							"type": "Expression"
+						},
+						"sec_secret_access_key": {
+							"value": "@variables('sec_secret_access_key')",
+							"type": "Expression"
+						},
+						"dec_password_sec": {
+							"value": "@variables('dec_password_sec')",
+							"type": "Expression"
+						},
+						"dec_private_key_sec": {
+							"value": "@variables('dec_private_key_sec')",
+							"type": "Expression"
+						},
+						"decrypt_script_path": {
+							"value": "@variables('decrypt_script_path')",
+							"type": "Expression"
+						},
+						"skip_priority_file": {
+							"value": "@variables('skip_priority_file')",
+							"type": "Expression"
+						},
+						"main_pipeline_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"main_pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set path_date",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "path_date",
+					"value": {
+						"value": "@formatDateTime(convertTimeZone(utcNow(),'UTC','Eastern Standard Time'),'yyyyMMdd')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get Raw Data Folders",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set file_date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set path_date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@{pipeline().Pipeline}/raw",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Filter For Todays Folder",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Get Raw Data Folders",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Raw Data Folders').output.childItems",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@startswith(item().name, variables('path_date'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "For Each of Todays Folders",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Filter For Todays Folder",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Filter For Todays Folder').output.Value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Check for files in binary path",
+							"description": "",
+							"type": "GetMetadata",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+									"type": "DatasetReference",
+									"parameters": {
+										"auth_sas_url_sec": {
+											"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+											"type": "Expression"
+										},
+										"container": {
+											"value": "@variables('tgt_container')",
+											"type": "Expression"
+										},
+										"path": {
+											"value": "@{pipeline().Pipeline}/raw/@{item().name}/bin",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"exists",
+									"childItems"
+								],
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							}
+						},
+						{
+							"name": "If binary path exists",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Check for files in binary path",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@activity('Check for files in binary path').output.exists",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Filter for priority file",
+										"type": "Filter",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"items": {
+												"value": "@activity('Check for files in binary path').output.childItems",
+												"type": "Expression"
+											},
+											"condition": {
+												"value": "@not(equals(indexof(item().name, 'priority'), -1))",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "Set skip_priority_file",
+										"type": "SetVariable",
+										"dependsOn": [
+											{
+												"activity": "Filter for priority file",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "skip_priority_file",
+											"value": {
+												"value": "@greater(activity('Filter for priority file').output.FilteredItemsCount, 0)",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get data_output_path_exists",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "PL_DBT_LOG_FILE_FOLDER_SF",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "DS_AzureBlob_Spire_Multifile_Binary",
+						"type": "DatasetReference",
+						"parameters": {
+							"auth_sas_url_sec": {
+								"value": "@pipeline().globalParameters.ENV_KV_SPIRE_AZURE_BLOB_SAS_URL_SEC",
+								"type": "Expression"
+							},
+							"container": {
+								"value": "@variables('tgt_container')",
+								"type": "Expression"
+							},
+							"path": {
+								"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_output_path",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"exists"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Run Bronze Modmed Tables",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Get data_output_path_exists",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/ModMedStaging",
+						"dbt_command": "run"
+					}
+				}
+			},
+			{
+				"name": "Test Bronze ModMed tables",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Run Bronze Modmed Tables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Run_Command_Ingest",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"model_path": "path:models/Bronze/RAW/ModMedStaging",
+						"dbt_command": "test"
+					}
+				}
+			},
+			{
+				"name": "Load Remaining Data Warehouse",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Test Bronze ModMed tables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_Warehouse_Load",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"pbiDatasetInputs": {
+							"value": "@pipeline().parameters.pbiDatasetInputs",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "PL_DBT_LOG_FILE_FOLDER_SF",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute PL_Output_Paths",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Execute PL_S3DataFetch_",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DBT_LOG_FILE_FOLDER_SF",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"FolderDate": {
+							"value": "@activity('Execute PL_Output_Paths').output.pipelineReturnValue.data_folder_path",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"concurrency": 1,
+		"policy": {
+			"elapsedTimeMetric": {
+				"duration": "0.06:00:00"
+			}
+		},
+		"parameters": {
+			"table_load_group": {
+				"type": "string"
+			},
+			"pbiDatasetInputs": {
+				"type": "Array",
+				"defaultValue": []
+			}
+		},
+		"variables": {
+			"tgt_db": {
+				"type": "String",
+				"defaultValue": "ModMedStaging"
+			},
+			"tgt_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"tgt_container": {
+				"type": "String",
+				"defaultValue": "modmed"
+			},
+			"sec_access_key": {
+				"type": "String",
+				"defaultValue": "sec-modmed-s3-access-key"
+			},
+			"sec_secret_access_key": {
+				"type": "String",
+				"defaultValue": "sec-modmed-s3-secret-key"
+			},
+			"src_bucket": {
+				"type": "String",
+				"defaultValue": "enterprise-datasets"
+			},
+			"file_date": {
+				"type": "String"
+			},
+			"src_path": {
+				"type": "String",
+				"defaultValue": "onsmd"
+			},
+			"dec_password_sec": {
+				"type": "String",
+				"defaultValue": "sec-modmed-decrypt-password"
+			},
+			"dec_private_key_sec": {
+				"type": "String",
+				"defaultValue": "sec-modmed-decrypt-private-key"
+			},
+			"tgt_metadata_schema": {
+				"type": "String",
+				"defaultValue": "metadata"
+			},
+			"decrypt_script_path": {
+				"type": "String",
+				"defaultValue": "utility/PL_Modmed"
+			},
+			"config_table_db": {
+				"type": "String",
+				"defaultValue": "DEV_META"
+			},
+			"config_table_schema": {
+				"type": "String",
+				"defaultValue": "etl_metadata"
+			},
+			"config_table_name": {
+				"type": "String",
+				"defaultValue": "adf_source_table_configs"
+			},
+			"source_key": {
+				"type": "String",
+				"defaultValue": "4"
+			},
+			"path_date": {
+				"type": "String"
+			},
+			"skip_priority_file": {
+				"type": "Boolean",
+				"defaultValue": false
+			},
+			"from": {
+				"type": "String",
+				"defaultValue": "spiredata@spireortho.com"
+			},
+			"table_list": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "Job_Modmed"
+		},
+		"annotations": []
+	}
+}

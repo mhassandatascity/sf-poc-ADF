@@ -1,0 +1,39 @@
+{
+	"name": "TR_Amkai_Monthly_1st_02_00_AM",
+	"properties": {
+		"description": "1st of each month",
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_Amkai",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"table_load_group": "Priority"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Month",
+				"interval": 1,
+				"startTime": "2023-11-22T23:00:00",
+				"timeZone": "Eastern Standard Time",
+				"schedule": {
+					"minutes": [
+						0
+					],
+					"hours": [
+						2
+					],
+					"monthDays": [
+						1
+					]
+				}
+			}
+		}
+	}
+}

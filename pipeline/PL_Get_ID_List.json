@@ -1,0 +1,78 @@
+{
+	"name": "PL_Get_ID_List",
+	"properties": {
+		"activities": [
+			{
+				"name": "Loop Appt IDs",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.FOUND_APPTS",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Add Appointments",
+							"type": "AppendVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "IDS",
+								"value": {
+									"value": "@concat('''',item()['APPOINTMENT_ID'], '''')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Set Output",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Loop Appt IDs",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "APPT_IDS",
+							"value": {
+								"type": "Expression",
+								"content": "@join(variables('IDS'), ',')"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			}
+		],
+		"parameters": {
+			"FOUND_APPTS": {
+				"type": "array"
+			}
+		},
+		"variables": {
+			"IDS": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "Job_RPA"
+		},
+		"annotations": []
+	}
+}

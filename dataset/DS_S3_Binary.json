@@ -1,0 +1,55 @@
+{
+	"name": "DS_S3_Binary",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_AmazonS3_Modmed",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"sec_access_key": {
+					"value": "@dataset().sec_access_key",
+					"type": "Expression"
+				},
+				"sec_secret_access_key": {
+					"value": "@dataset().sec_secret_access_key",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"sec_access_key": {
+				"type": "string"
+			},
+			"sec_secret_access_key": {
+				"type": "string"
+			},
+			"bucket": {
+				"type": "string"
+			},
+			"path": {
+				"type": "string"
+			},
+			"file": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AmazonS3Location",
+				"bucketName": {
+					"value": "@dataset().bucket",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().path",
+					"type": "Expression"
+				},
+				"fileName": {
+					"value": "@dataset().file",
+					"type": "Expression"
+				}
+			}
+		}
+	}
+}

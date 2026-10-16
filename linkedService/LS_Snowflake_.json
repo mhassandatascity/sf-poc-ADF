@@ -1,0 +1,46 @@
+{
+	"name": "LS_Snowflake_",
+	"properties": {
+		"parameters": {
+			"conn_str_sec": {
+				"type": "string"
+			},
+			"database": {
+				"type": "string"
+			},
+			"warehouse": {
+				"type": "string"
+			},
+			"user_name": {
+				"type": "string"
+			},
+			"account_name": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "SnowflakeV2",
+		"typeProperties": {
+			"authenticationType": "Basic",
+			"accountIdentifier": "@{linkedService().account_name}",
+			"user": "@{linkedService().user_name}",
+			"database": "@{linkedService().database}",
+			"warehouse": "@{linkedService().warehouse}",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().conn_str_sec",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "SAE-SelfHosted-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

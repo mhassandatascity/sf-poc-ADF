@@ -1,0 +1,60 @@
+{
+	"name": "PL_Batch_Execute_Scripts",
+	"properties": {
+		"activities": [
+			{
+				"name": "Trigger Python Script On Batch Pool",
+				"type": "Custom",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.01:30:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"command": {
+						"value": "@pipeline().parameters.command",
+						"type": "Expression"
+					},
+					"resourceLinkedService": {
+						"referenceName": "LS_SpireDF_Blob_MSI",
+						"type": "LinkedServiceReference"
+					},
+					"folderPath": {
+						"value": "@pipeline().parameters.python_script_path",
+						"type": "Expression"
+					},
+					"referenceObjects": {
+						"linkedServices": [],
+						"datasets": []
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_AzureBatch_Modmed",
+					"type": "LinkedServiceReference"
+				}
+			}
+		],
+		"parameters": {
+			"python_script_path": {
+				"type": "string"
+			},
+			"command": {
+				"type": "string"
+			},
+			"main_pipeline_name": {
+				"type": "string"
+			},
+			"main_pipeline_run_id": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Job_BatchPool"
+		},
+		"annotations": []
+	}
+}

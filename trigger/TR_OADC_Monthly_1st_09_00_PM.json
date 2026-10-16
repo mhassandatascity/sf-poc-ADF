@@ -1,0 +1,58 @@
+{
+	"name": "TR_OADC_Monthly_1st_09_00_PM",
+	"properties": {
+		"description": "1st of each month",
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_OADC",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"pbiDatasetInputs": [
+						{
+							"dev": [
+								{
+									"pbiDatasetName": "OADC",
+									"pbiWorkspaceId": "a4b4f778-0dae-4016-af65-0fc5a7511dd2",
+									"pbiDatasetId": "1fe2d60c-95f0-4819-bb8d-7de4c675fcef",
+									"pollingIntervalInSeconds": 60
+								}
+							],
+							"prod": [
+								{
+									"pbiDatasetName": "OADC",
+									"pbiWorkspaceId": "35a1e708-bdc1-433d-ad24-489be6e5e88c",
+									"pbiDatasetId": "f4c5e5ca-a53a-468b-9c84-9a9983d5f2df",
+									"pollingIntervalInSeconds": 60
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Month",
+				"interval": 1,
+				"startTime": "2023-12-08T06:00:00",
+				"timeZone": "Eastern Standard Time",
+				"schedule": {
+					"minutes": [
+						0
+					],
+					"hours": [
+						21
+					],
+					"monthDays": [
+						1
+					]
+				}
+			}
+		}
+	}
+}

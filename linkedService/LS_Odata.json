@@ -1,0 +1,39 @@
+{
+	"name": "LS_Odata",
+	"properties": {
+		"description": "OData Linked Service with Basic Auth\n",
+		"parameters": {
+			"service_url": {
+				"type": "string"
+			},
+			"auth_user": {
+				"type": "string"
+			},
+			"auth_password_sec": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "OData",
+		"typeProperties": {
+			"url": "@{linkedService().service_url}",
+			"authenticationType": "Basic",
+			"userName": "@{linkedService().auth_user}",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_SpireDF_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().auth_password_sec",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "SAE-SelfHosted-IR",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}
