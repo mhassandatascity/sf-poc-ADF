@@ -62,7 +62,7 @@
 				"typeProperties": {
 					"location": {
 						"type": "HttpServerLocation",
-						"relativeUrl": "trip-data/yellow_tripdata_2026-01.parquet"
+						"relativeUrl": "trip-data/yellow_tripdata_2026-02.parquet"
 					}
 				}
 			},
@@ -84,7 +84,7 @@
 				"typeProperties": {
 					"location": {
 						"type": "AzureBlobFSLocation",
-						"fileName": "yellow_tripdata_2026-01.parquet",
+						"fileName": "yellow_tripdata_2026-02.parquet",
 						"folderPath": "landing/yellow",
 						"fileSystem": "nyctaxidata"
 					}
